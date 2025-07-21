@@ -1,0 +1,36 @@
+.spending-container {
+  padding: 20px;
+}
+
+.upload-section {
+  margin-top: 20px;
+}
+
+.spending-container {
+  padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.spending-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.spending-header h2 {
+  margin: 0;
+}
+
+.spending-table {
+  flex-grow: 1;
+  overflow: auto;
+}
+
+.upload-section {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}

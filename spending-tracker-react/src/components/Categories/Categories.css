@@ -1,0 +1,48 @@
+.categories-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.categories-header {
+  margin-bottom: 32px;
+}
+
+.parent-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.parent-category-card {
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+}
+
+.category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-grow: 1;
+}
+
+.category-chips .MuiChip-root {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.category-chips .MuiChip-root:hover {
+  background-color: #f0f0f0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .parent-categories-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .categories-container {
+    padding: 16px;
+  }
+}

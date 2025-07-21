@@ -1,0 +1,42 @@
+## .NET Core
+bin/
+obj/
+out/
+
+## Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+## SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Logs
+*.log
+
+## Visual Studio for Mac
+.vs/
+.idea/
+
+## Rider
+.idea/
+
+## User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Mono Auto Generated Files
+mono_crash.*
