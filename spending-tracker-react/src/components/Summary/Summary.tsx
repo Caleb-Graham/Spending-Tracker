@@ -4,11 +4,6 @@ import {
   MenuItem, 
   FormControl, 
   InputLabel,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   Table,
   TableBody,
   TableCell,
@@ -35,7 +30,6 @@ const dateRangeOptions = [
   { value: 'last30', label: 'Last 30 Days' },
   { value: 'lastYear', label: 'Last Year' },
   { value: 'all', label: 'All Time' },
-  { value: 'custom', label: 'Custom Range' },
 ];
 
 const Summary = () => {
@@ -45,24 +39,48 @@ const Summary = () => {
     return saved || 'ytd';
   });
   
-  // Load custom date range from localStorage
-  const [customDateRange, setCustomDateRange] = useState<{start: Date | null, end: Date | null}>(() => {
-    const saved = localStorage.getItem('summary-custom-date-range');
+  // Load custom date range from localStorage  
+  const [startDate, setStartDate] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('summary-start-date');
     if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          start: parsed.start ? new Date(parsed.start) : null,
-          end: parsed.end ? new Date(parsed.end) : null
-        };
-      } catch {
-        return { start: null, end: null };
-      }
+      return new Date(saved);
     }
-    return { start: null, end: null };
+    // If no saved date, initialize based on current dateRange
+    const savedRange = localStorage.getItem('summary-date-range') || 'ytd';
+    const now = new Date();
+    switch (savedRange) {
+      case 'ytd':
+        return startOfYear(now);
+      case 'last30':
+        return subDays(now, 30);
+      case 'last90':
+        return subDays(now, 90);
+      case 'lastYear':
+        return new Date(now.getFullYear() - 1, 0, 1);
+      default:
+        return null;
+    }
   });
   
-  const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
+  const [endDate, setEndDate] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('summary-end-date');
+    if (saved) {
+      return new Date(saved);
+    }
+    // If no saved date, initialize based on current dateRange
+    const savedRange = localStorage.getItem('summary-date-range') || 'ytd';
+    const now = new Date();
+    switch (savedRange) {
+      case 'ytd':
+      case 'last30':
+      case 'last90':
+        return now;
+      case 'lastYear':
+        return new Date(now.getFullYear() - 1, 11, 31);
+      default:
+        return null;
+    }
+  });
   const [categorySummary, setCategorySummary] = useState<CategorySummary[]>([]);
   const [detailedCategorySummary, setDetailedCategorySummary] = useState<DetailedCategorySummary[]>([]);
   const [incomeExpenseData, setIncomeExpenseData] = useState<{ income: CategorySummary[], expenses: CategorySummary[] }>({ income: [], expenses: [] });
@@ -113,30 +131,37 @@ const Summary = () => {
         return { start: lastYear, end: endOfLastYear };
       case 'all':
         return {};
-      case 'custom':
-        return { 
-          start: customDateRange.start || undefined, 
-          end: customDateRange.end || undefined 
-        };
       default:
         return {};
     }
   };
 
   useEffect(() => {
-    const { start, end } = getDateRangeForSelection(dateRange);
-    loadCategorySummary(start, end);
-  }, [dateRange, customDateRange]);
-
-  // Save custom date range to localStorage whenever it changes
-  useEffect(() => {
-    if (customDateRange.start && customDateRange.end) {
-      localStorage.setItem('summary-custom-date-range', JSON.stringify({
-        start: customDateRange.start.toISOString(),
-        end: customDateRange.end.toISOString()
-      }));
+    // Use custom dates if both are set, otherwise use the selected date range
+    if (startDate && endDate) {
+      loadCategorySummary(startDate, endDate);
+    } else {
+      const { start, end } = getDateRangeForSelection(dateRange);
+      loadCategorySummary(start, end);
     }
-  }, [customDateRange]);
+  }, [dateRange, startDate, endDate]);
+
+  // Save custom dates to localStorage whenever they change
+  useEffect(() => {
+    if (startDate) {
+      localStorage.setItem('summary-start-date', startDate.toISOString());
+    } else {
+      localStorage.removeItem('summary-start-date');
+    }
+  }, [startDate]);
+
+  useEffect(() => {
+    if (endDate) {
+      localStorage.setItem('summary-end-date', endDate.toISOString());
+    } else {
+      localStorage.removeItem('summary-end-date');
+    }
+  }, [endDate]);
 
   const handleDateRangeChange = (event: any) => {
     const value = event.target.value;
@@ -145,28 +170,24 @@ const Summary = () => {
     // Save to localStorage
     localStorage.setItem('summary-date-range', value);
     
-    if (value === 'custom') {
-      setIsCustomDatePickerOpen(true);
-    } else {
-      // TODO: Fetch data for the selected date range
-    }
-  };
-
-  const handleCustomDateConfirm = () => {
-    if (customDateRange.start && customDateRange.end) {
-      setIsCustomDatePickerOpen(false);
-      // Data will be loaded automatically by useEffect when customDateRange changes
-      // localStorage saving is handled by the useEffect hook above
+    // Auto-populate the date inputs based on the selection
+    const { start, end } = getDateRangeForSelection(value);
+    if (start && end) {
+      setStartDate(start);
+      setEndDate(end);
+    } else if (value === 'all') {
+      // Clear dates for "All Time"
+      setStartDate(null);
+      setEndDate(null);
     }
   };
 
   const getDisplayDateRange = () => {
+    if (startDate && endDate) {
+      return `${format(startDate, 'MMM d, yyyy')} - ${format(endDate, 'MMM d, yyyy')}`;
+    }
+    
     switch (dateRange) {
-      case 'custom':
-        if (customDateRange.start && customDateRange.end) {
-          return `${format(customDateRange.start, 'MMM d, yyyy')} - ${format(customDateRange.end, 'MMM d, yyyy')}`;
-        }
-        return 'Select dates';
       case 'ytd':
         return `Jan 1, ${new Date().getFullYear()} - Present`;
       case 'last90':
@@ -296,61 +317,58 @@ const Summary = () => {
         <Typography variant="body1" color="textSecondary" paragraph>
           View your spending breakdown and category analysis for {getDisplayDateRange()}
         </Typography>
-      </div>
-
-      <div className="summary-header">
-        <FormControl className="date-selector">
-          <InputLabel id="date-range-label">Date Range</InputLabel>
-          <Select
-            labelId="date-range-label"
-            id="date-range"
-            value={dateRange}
-            label="Date Range"
-            onChange={handleDateRangeChange}
-          >
-            {dateRangeOptions.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-                {option.value === dateRange && option.value === 'custom' && (
-                  <span style={{ marginLeft: '8px', fontSize: '0.85em', color: '#666' }}>
-                    ({getDisplayDateRange()})
-                  </span>
-                )}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </div>
-
-      <LocalizationProvider dateAdapter={AdapterDateFns}>
-        <Dialog open={isCustomDatePickerOpen} onClose={() => setIsCustomDatePickerOpen(false)}>
-          <DialogTitle>Select Date Range</DialogTitle>
-          <DialogContent>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
+        
+        {/* Date Range Controls */}
+        <div className="summary-header">
+          <div style={{ flex: 1 }}></div> {/* Spacer to push content to the right */}
+          <FormControl className="date-selector" size="small">
+            <InputLabel id="date-range-label">Date Range</InputLabel>
+            <Select
+              labelId="date-range-label"
+              id="date-range"
+              value={dateRange}
+              label="Date Range"
+              onChange={handleDateRangeChange}
+              size="small"
+            >
+              {dateRangeOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          
+          {/* Custom Date Range Inputs */}
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <Box display="flex" gap={2} alignItems="center" ml={3}>
               <DatePicker
                 label="Start Date"
-                value={customDateRange.start}
-                onChange={(newValue) => setCustomDateRange(prev => ({ ...prev, start: newValue }))}
+                value={startDate}
+                onChange={(newValue) => setStartDate(newValue)}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    style: { minWidth: '140px' }
+                  }
+                }}
               />
               <DatePicker
                 label="End Date"
-                value={customDateRange.end}
-                onChange={(newValue) => setCustomDateRange(prev => ({ ...prev, end: newValue }))}
-                minDate={customDateRange.start || undefined}
+                value={endDate}
+                onChange={(newValue) => setEndDate(newValue)}
+                minDate={startDate || undefined}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    style: { minWidth: '140px' }
+                  }
+                }}
               />
-            </div>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setIsCustomDatePickerOpen(false)}>Cancel</Button>
-            <Button 
-              onClick={handleCustomDateConfirm}
-              disabled={!customDateRange.start || !customDateRange.end}
-            >
-              Apply
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </LocalizationProvider>
+            </Box>
+          </LocalizationProvider>
+        </div>
+      </div>
 
       {/* Income and Expense Tables Side by Side */}
       <Box display="flex" gap={3} style={{ marginTop: '16px' }} flexDirection={{ xs: 'column', md: 'row' }}>
