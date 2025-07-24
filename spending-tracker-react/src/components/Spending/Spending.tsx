@@ -18,12 +18,16 @@ import {
   MenuItem,
   TextField,
   Chip,
-  Typography
+  Typography,
+  TableSortLabel
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import './Spending.css';
+
+type SortField = 'date' | 'note' | 'category' | 'amount' | 'type';
+type SortDirection = 'asc' | 'desc';
 
 const Spending = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -40,6 +44,10 @@ const Spending = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+
+  // Sorting states
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const loadTransactions = async () => {
     setIsLoading(true);
@@ -90,11 +98,62 @@ const Spending = () => {
     return true;
   });
 
+  // Sort transactions based on current sort settings
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortField) {
+      case 'date':
+        aValue = new Date(a.date).getTime();
+        bValue = new Date(b.date).getTime();
+        break;
+      case 'note':
+        aValue = a.note.toLowerCase();
+        bValue = b.note.toLowerCase();
+        break;
+      case 'category':
+        aValue = (a.category?.name || 'Uncategorized').toLowerCase();
+        bValue = (b.category?.name || 'Uncategorized').toLowerCase();
+        break;
+      case 'amount':
+        aValue = Math.abs(a.amount);
+        bValue = Math.abs(b.amount);
+        break;
+      case 'type':
+        aValue = a.isIncome ? 'INCOME' : 'EXPENSE';
+        bValue = b.isIncome ? 'INCOME' : 'EXPENSE';
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) {
+      return sortDirection === 'asc' ? -1 : 1;
+    }
+    if (aValue > bValue) {
+      return sortDirection === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+
   // Calculate which transactions to display on current page
-  const paginatedTransactions = filteredTransactions.slice(
+  const paginatedTransactions = sortedTransactions.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
   );
+
+  // Handle sort column click
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // If clicking the same field, toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // If clicking a new field, set it as sort field with ascending direction
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   // Reset page when filters change
   useEffect(() => {
@@ -307,11 +366,51 @@ const Spending = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Date</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell align="right">Amount</TableCell>
-                <TableCell>Type</TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortField === 'date'}
+                    direction={sortField === 'date' ? sortDirection : 'asc'}
+                    onClick={() => handleSort('date')}
+                  >
+                    Date
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortField === 'note'}
+                    direction={sortField === 'note' ? sortDirection : 'asc'}
+                    onClick={() => handleSort('note')}
+                  >
+                    Description
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortField === 'category'}
+                    direction={sortField === 'category' ? sortDirection : 'asc'}
+                    onClick={() => handleSort('category')}
+                  >
+                    Category
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right">
+                  <TableSortLabel
+                    active={sortField === 'amount'}
+                    direction={sortField === 'amount' ? sortDirection : 'asc'}
+                    onClick={() => handleSort('amount')}
+                  >
+                    Amount
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortField === 'type'}
+                    direction={sortField === 'type' ? sortDirection : 'asc'}
+                    onClick={() => handleSort('type')}
+                  >
+                    Type
+                  </TableSortLabel>
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -321,7 +420,7 @@ const Spending = () => {
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
-              ) : filteredTransactions.length === 0 ? (
+              ) : sortedTransactions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} align="center">
                     {transactions.length === 0 
@@ -360,7 +459,7 @@ const Spending = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
           <TablePagination
             component="div"
-            count={filteredTransactions.length}
+            count={sortedTransactions.length}
             page={page}
             onPageChange={handleChangePage}
             rowsPerPage={rowsPerPage}
