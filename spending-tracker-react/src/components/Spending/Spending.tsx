@@ -108,22 +108,27 @@ const Spending = () => {
 
   // Get categories filtered by transaction type
   const getFilteredCategories = () => {
+    let filteredCategories;
+    
     if (typeFilter === 'all') {
-      return categories;
+      filteredCategories = categories;
+    } else {
+      // Get categories that have transactions of the selected type
+      const relevantCategories = new Set<number>();
+      
+      transactions.forEach(transaction => {
+        if (typeFilter === 'income' && transaction.isIncome && transaction.category) {
+          relevantCategories.add(transaction.category.categoryId);
+        } else if (typeFilter === 'expense' && !transaction.isIncome && transaction.category) {
+          relevantCategories.add(transaction.category.categoryId);
+        }
+      });
+
+      filteredCategories = categories.filter(category => relevantCategories.has(category.categoryId));
     }
 
-    // Get categories that have transactions of the selected type
-    const relevantCategories = new Set<number>();
-    
-    transactions.forEach(transaction => {
-      if (typeFilter === 'income' && transaction.isIncome && transaction.category) {
-        relevantCategories.add(transaction.category.categoryId);
-      } else if (typeFilter === 'expense' && !transaction.isIncome && transaction.category) {
-        relevantCategories.add(transaction.category.categoryId);
-      }
-    });
-
-    return categories.filter(category => relevantCategories.has(category.categoryId));
+    // Sort categories alphabetically by name
+    return filteredCategories.sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const clearFilters = () => {

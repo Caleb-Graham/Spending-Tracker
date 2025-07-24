@@ -336,10 +336,16 @@ public class TransactionMethods
 
                 if (category == null)
                 {
+                    // Find the "Unassigned" parent category for the appropriate type
+                    var categoryType = record.Amount > 0 ? "Income" : "Expense";
+                    var unassignedParent = await _context.Categories
+                        .FirstOrDefaultAsync(c => c.Name == "Unassigned" && c.Type == categoryType && c.ParentCategoryId == null);
+
                     category = new Category
                     {
                         Name = record.Category,
-                        Type = record.Amount > 0 ? "Income" : "Expense"
+                        Type = categoryType,
+                        ParentCategoryId = unassignedParent?.CategoryId // Assign as child of "Unassigned"
                     };
                     _context.Categories.Add(category);
                     await _context.SaveChangesAsync();

@@ -239,6 +239,75 @@ const Categories = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState<{message: string, severity: 'success' | 'error'} | null>(null);
 
+  // Auto-scroll functionality for drag and drop
+  useEffect(() => {
+    let animationId: number;
+    let isScrolling = false;
+
+    const autoScroll = (e: MouseEvent) => {
+      const scrollThreshold = 100;
+      const scrollSpeed = 5;
+      const { clientY } = e;
+      const windowHeight = window.innerHeight;
+
+      if (clientY < scrollThreshold) {
+        // Scroll up
+        if (!isScrolling) {
+          isScrolling = true;
+          const scroll = () => {
+            window.scrollBy(0, -scrollSpeed);
+            if (isScrolling) {
+              animationId = requestAnimationFrame(scroll);
+            }
+          };
+          scroll();
+        }
+      } else if (clientY > windowHeight - scrollThreshold) {
+        // Scroll down
+        if (!isScrolling) {
+          isScrolling = true;
+          const scroll = () => {
+            window.scrollBy(0, scrollSpeed);
+            if (isScrolling) {
+              animationId = requestAnimationFrame(scroll);
+            }
+          };
+          scroll();
+        }
+      } else {
+        // Stop scrolling
+        if (isScrolling) {
+          isScrolling = false;
+          cancelAnimationFrame(animationId);
+        }
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      // Only handle if we're dragging a category chip
+      if (e.dataTransfer?.types.includes('application/json')) {
+        autoScroll(e as any);
+      }
+    };
+
+    const handleDragEnd = () => {
+      isScrolling = false;
+      cancelAnimationFrame(animationId);
+    };
+
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('dragend', handleDragEnd);
+    document.addEventListener('drop', handleDragEnd);
+
+    return () => {
+      document.removeEventListener('dragover', handleDragOver);
+      document.removeEventListener('dragend', handleDragEnd);
+      document.removeEventListener('drop', handleDragEnd);
+      isScrolling = false;
+      cancelAnimationFrame(animationId);
+    };
+  }, []);
+
   // Load data when component mounts or category type changes
   useEffect(() => {
     loadData();
@@ -431,7 +500,48 @@ const Categories = () => {
             {selectedCategoryType} Categories
           </Typography>
           
+          {/* Unassigned Categories Section */}
+          {(() => {
+            const unassignedParent = parentCategories.find(p => p.name === 'Unassigned');
+            const unassignedMappings = unassignedParent 
+              ? categoryMappings.filter(mapping => mapping.parentCategory === 'Unassigned')
+                  .sort((a, b) => a.categoryName.localeCompare(b.categoryName))
+              : [];
+              
+            if (unassignedMappings.length > 0) {
+              return (
+                <Paper style={{ 
+                  gridColumn: '1 / -1', 
+                  margin: '10px', 
+                  padding: '16px', 
+                  backgroundColor: '#f5f5f5',
+                  marginBottom: '20px'
+                }}>
+                  <Box display="flex" justifyContent="flex-start" alignItems="center" marginBottom={1}>
+                    <Typography variant="subtitle1" color="textSecondary">
+                      Unassigned:
+                    </Typography>
+                  </Box>
+                  <Box display="flex" flexWrap="wrap" gap={1}>
+                    {unassignedMappings.map(mapping => (
+                      <DraggableChildChip
+                        key={mapping.id}
+                        mapping={mapping}
+                        parentCategories={parentCategories}
+                        onEdit={(mapping) => openDialog('child', 'edit', mapping)}
+                        onDelete={(id) => handleDelete('child', id)}
+                        onMove={handleMoveChild}
+                      />
+                    ))}
+                  </Box>
+                </Paper>
+              );
+            }
+            return null;
+          })()}
+          
           {parentCategories
+            .filter(p => p.name !== 'Unassigned') // Filter out Unassigned from main cards
             .sort((a, b) => a.name.localeCompare(b.name))
             .map(parentCategory => (
             <DroppableParentCard
@@ -448,7 +558,7 @@ const Categories = () => {
             />
           ))}
           
-          {parentCategories.length === 0 && !isLoading && (
+          {parentCategories.filter(p => p.name !== 'Unassigned').length === 0 && !isLoading && (
             <Card style={{ margin: '10px', padding: '20px', textAlign: 'center' }}>
               <Typography variant="body1" color="textSecondary">
                 No parent categories found. Create your first parent category to get started.
