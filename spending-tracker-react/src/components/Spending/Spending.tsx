@@ -301,19 +301,6 @@ const Spending = () => {
               </Button>
             </Box>
           </Box>
-
-          {/* Results Summary */}
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="textSecondary">
-              Showing {filteredTransactions.length} of {transactions.length} transactions
-              {getActiveFilterCount() > 0 && " (filtered)"}
-              {typeFilter !== 'all' && (
-                <span style={{ marginLeft: '8px' }}>
-                  • {getFilteredCategories().length} {typeFilter} categories available
-                </span>
-              )}
-            </Typography>
-          </Box>
         </Paper>
 
         <TableContainer component={Paper} className="spending-table">

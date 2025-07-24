@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3-selection';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
 import { scaleOrdinal } from 'd3-scale';
@@ -17,10 +17,49 @@ interface SankeyDiagramProps {
 
 const SankeyDiagram: React.FC<SankeyDiagramProps> = ({ 
   data, 
-  width = 1200, 
-  height = 800 
+  width,
+  height
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
+
+  // Update dimensions based on container size
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const containerWidth = containerRect.width || containerRef.current.offsetWidth;
+        const containerHeight = Math.max(500, window.innerHeight * 0.6); // At least 500px, max 60% of viewport
+        
+        // Calculate responsive dimensions with proper bounds
+        const responsiveWidth = Math.max(600, Math.min(containerWidth - 40, 1400)); // Min 600px, max 1400px
+        const responsiveHeight = Math.max(400, Math.min(containerHeight, 800)); // Min 400px, max 800px
+        
+        setDimensions({
+          width: width || responsiveWidth,
+          height: height || responsiveHeight
+        });
+      }
+    };
+
+    // Initial update
+    updateDimensions();
+    
+    // Add resize observer for more accurate container size detection
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+    
+    // Also listen to window resize as fallback
+    window.addEventListener('resize', updateDimensions);
+    
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, [width, height]);
 
   useEffect(() => {
     if (!data || !data.nodes.length || !data.links.length) return;
@@ -29,13 +68,16 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
     svg.selectAll("*").remove(); // Clear previous render
 
     const margin = { top: 20, right: 20, bottom: 20, left: 20 };
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
+    const innerWidth = dimensions.width - margin.left - margin.right;
+    const innerHeight = dimensions.height - margin.top - margin.bottom;
+
+    // Ensure minimum dimensions for readability
+    if (innerWidth < 300 || innerHeight < 200) return;
 
     // Create the sankey generator
     const sankeyGenerator = sankey()
-      .nodeWidth(20)
-      .nodePadding(8)
+      .nodeWidth(Math.max(15, Math.min(25, innerWidth * 0.02))) // Responsive node width
+      .nodePadding(Math.max(5, Math.min(12, innerHeight * 0.015))) // Responsive padding
       .extent([[1, 1], [innerWidth - 1, innerHeight - 1]]);
 
     // Transform data to the format D3 sankey expects
@@ -70,8 +112,10 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
     };
 
     const g = svg
-      .attr("width", width)
-      .attr("height", height)
+      .attr("width", dimensions.width)
+      .attr("height", dimensions.height)
+      .attr("viewBox", `0 0 ${dimensions.width} ${dimensions.height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet")
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -167,24 +211,41 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
       .attr("dy", "0.35em")
       .attr("text-anchor", (d: any) => d.x0 < innerWidth / 2 ? "start" : "end")
       .attr("font-family", "sans-serif")
-      .attr("font-size", "11px")
+      .attr("font-size", `${Math.max(9, Math.min(12, innerWidth * 0.01))}px`) // Responsive font size
       .attr("fill", "#333")
       .text((d: any) => {
-        // Show shorter names for better readability when there are many nodes
+        // Show shorter names for better readability based on available space
         const name = d.name;
-        if (name.length > 20) {
-          return name.substring(0, 18) + '...';
+        const maxLength = innerWidth < 800 ? 15 : 20;
+        if (name.length > maxLength) {
+          return name.substring(0, maxLength - 3) + '...';
         }
         return name;
       })
       .append("title")
       .text((d: any) => d.name); // Full name on hover
 
-  }, [data, width, height]);
+  }, [data, dimensions]); // Updated dependency to use dimensions instead of width/height
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <svg ref={svgRef}></svg>
+    <div 
+      ref={containerRef}
+      style={{ 
+        width: '100%', 
+        height: '100%',
+        minHeight: '500px',
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        overflow: 'hidden'
+      }}
+    >
+      <svg 
+        ref={svgRef}
+        width={dimensions.width}
+        height={dimensions.height}
+        style={{ maxWidth: '100%', height: 'auto' }}
+      ></svg>
     </div>
   );
 };
