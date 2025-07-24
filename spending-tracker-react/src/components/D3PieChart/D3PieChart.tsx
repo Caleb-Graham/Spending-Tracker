@@ -31,7 +31,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear previous render
 
-    const margin = { top: 20, right: 20, bottom: 80, left: 20 };
+    const margin = { top: 20, right: 20, bottom: 160, left: 20 };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
     const radius = Math.min(innerWidth, innerHeight) / 2;
@@ -58,7 +58,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
       .attr("width", width)
       .attr("height", height)
       .append("g")
-      .attr("transform", `translate(${width / 2},${(height - margin.bottom) / 2})`);
+      .attr("transform", `translate(${width / 2},${(height - margin.bottom) / 2 + margin.top})`);
 
     const arcs = g.selectAll(".arc")
       .data(pieGenerator(data))
@@ -121,17 +121,17 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
     // Create legend
     const legend = svg.append("g")
       .attr("class", "legend")
-      .attr("transform", `translate(20, ${height - margin.bottom + 10})`);
+      .attr("transform", `translate(20, ${height - margin.bottom + 30})`);
 
     const legendItems = legend.selectAll(".legend-item")
       .data(data)
       .enter().append("g")
       .attr("class", "legend-item")
       .attr("transform", (d, i) => {
-        const itemsPerRow = Math.floor(innerWidth / 150);
+        const itemsPerRow = Math.floor((innerWidth + 40) / 160); // Adjust for wider spacing
         const row = Math.floor(i / itemsPerRow);
         const col = i % itemsPerRow;
-        return `translate(${col * 150}, ${row * 20})`;
+        return `translate(${col * 160}, ${row * 24})`; // Increase vertical spacing even more
       });
 
     legendItems.append("rect")
