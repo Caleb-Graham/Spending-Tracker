@@ -598,8 +598,8 @@ const Summary = () => {
           ) : (
             <SankeyDiagram 
               data={getSankeyData()} 
-              width={1200} 
-              height={800} 
+              width={1600} 
+              height={1000} 
             />
           )}
         </Paper>
