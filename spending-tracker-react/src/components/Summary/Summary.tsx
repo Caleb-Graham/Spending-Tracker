@@ -19,7 +19,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { startOfYear, subDays, format } from 'date-fns';
-import { getCategorySummary, getIncomeExpenseSummary, getAllCategories, getDetailedCategorySummary, type CategorySummary, type Category, type DetailedCategorySummary } from '../../services';
+import { getCategorySummary, getIncomeExpenseSummary, getAllCategories, getDetailedCategorySummary, getTransactions, type CategorySummary, type Category, type DetailedCategorySummary, type Transaction } from '../../services';
 import SankeyDiagram from '../SankeyDiagram/SankeyDiagram';
 import D3PieChart from '../D3PieChart/D3PieChart';
 import './Summary.css';
@@ -87,6 +87,29 @@ const Summary = () => {
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Function to get the earliest transaction date
+  const getEarliestTransactionDate = async (): Promise<Date> => {
+    try {
+      const transactions = await getTransactions();
+      if (transactions.length === 0) {
+        // If no transactions, default to current date
+        return new Date();
+      }
+      
+      // Find the earliest transaction date
+      const earliestDate = transactions.reduce((earliest, transaction) => {
+        const transactionDate = new Date(transaction.date);
+        return transactionDate < earliest ? transactionDate : earliest;
+      }, new Date(transactions[0].date));
+      
+      return earliestDate;
+    } catch (error) {
+      console.error('Failed to fetch transactions for earliest date:', error);
+      // Fallback to current date if there's an error
+      return new Date();
+    }
+  };
+
   const loadCategorySummary = async (startDate?: Date, endDate?: Date) => {
     setIsLoading(true);
     try {
@@ -116,7 +139,7 @@ const Summary = () => {
     }
   };
 
-  const getDateRangeForSelection = (selection: string): { start?: Date, end?: Date } => {
+  const getDateRangeForSelection = async (selection: string): Promise<{ start?: Date, end?: Date }> => {
     const now = new Date();
     switch (selection) {
       case 'ytd':
@@ -130,7 +153,8 @@ const Summary = () => {
         const endOfLastYear = new Date(now.getFullYear() - 1, 11, 31);
         return { start: lastYear, end: endOfLastYear };
       case 'all':
-        return {};
+        const earliestDate = await getEarliestTransactionDate();
+        return { start: earliestDate, end: now };
       default:
         return {};
     }
@@ -138,12 +162,16 @@ const Summary = () => {
 
   useEffect(() => {
     // Use custom dates if both are set, otherwise use the selected date range
-    if (startDate && endDate) {
-      loadCategorySummary(startDate, endDate);
-    } else {
-      const { start, end } = getDateRangeForSelection(dateRange);
-      loadCategorySummary(start, end);
-    }
+    const loadData = async () => {
+      if (startDate && endDate) {
+        loadCategorySummary(startDate, endDate);
+      } else {
+        const { start, end } = await getDateRangeForSelection(dateRange);
+        loadCategorySummary(start, end);
+      }
+    };
+    
+    loadData();
   }, [dateRange, startDate, endDate]);
 
   // Save custom dates to localStorage whenever they change
@@ -163,7 +191,7 @@ const Summary = () => {
     }
   }, [endDate]);
 
-  const handleDateRangeChange = (event: any) => {
+  const handleDateRangeChange = async (event: any) => {
     const value = event.target.value;
     setDateRange(value);
     
@@ -171,12 +199,13 @@ const Summary = () => {
     localStorage.setItem('summary-date-range', value);
     
     // Auto-populate the date inputs based on the selection
-    const { start, end } = getDateRangeForSelection(value);
+    const { start, end } = await getDateRangeForSelection(value);
     if (start && end) {
       setStartDate(start);
       setEndDate(end);
     } else if (value === 'all') {
-      // Clear dates for "All Time"
+      // For "All Time", the function should return start and end dates now
+      // But if for some reason it doesn't, clear them
       setStartDate(null);
       setEndDate(null);
     }
