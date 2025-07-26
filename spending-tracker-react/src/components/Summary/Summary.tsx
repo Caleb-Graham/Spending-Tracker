@@ -237,14 +237,16 @@ const Summary = () => {
     const nodes: any[] = [];
     const links: any[] = [];
 
-    // Add income sources as nodes (left side)
-    incomeExpenseData.income.forEach(income => {
-      nodes.push({
-        id: `income-${income.categoryId}`,
-        name: income.categoryName,
-        category: 'income'
+    // Add income sources as nodes (left side) - sorted by amount descending
+    incomeExpenseData.income
+      .sort((a, b) => b.amount - a.amount) // Sort by amount descending (highest to lowest)
+      .forEach(income => {
+        nodes.push({
+          id: `income-${income.categoryId}`,
+          name: income.categoryName,
+          category: 'income'
+        });
       });
-    });
 
     // Add "Available Money" as intermediate node
     nodes.push({
@@ -253,14 +255,16 @@ const Summary = () => {
       category: 'intermediate'
     });
 
-    // Add expense parent categories as nodes (middle)
-    incomeExpenseData.expenses.forEach(expense => {
-      nodes.push({
-        id: `expense-parent-${expense.categoryId}`,
-        name: expense.categoryName,
-        category: 'expense-parent'
+    // Add expense parent categories as nodes (middle) - sorted by amount descending
+    incomeExpenseData.expenses
+      .sort((a, b) => b.amount - a.amount) // Sort by amount descending (highest to lowest)
+      .forEach(expense => {
+        nodes.push({
+          id: `expense-parent-${expense.categoryId}`,
+          name: expense.categoryName,
+          category: 'expense-parent'
+        });
       });
-    });
 
     // Find child categories from detailedCategorySummary that have parents in incomeExpenseData.expenses
     const expenseChildCategories = detailedCategorySummary.filter(category => {
@@ -279,43 +283,51 @@ const Summary = () => {
       return parentExists && isExpenseType;
     });
 
-    // Add child categories as nodes (right side)
-    expenseChildCategories.forEach(category => {
-      nodes.push({
-        id: `expense-child-${category.categoryId}`,
-        name: category.categoryName,
-        category: 'expense-child'
-      });
-    });
-
-    // Create links from income to "Available Money"
-    incomeExpenseData.income.forEach(income => {
-      links.push({
-        source: `income-${income.categoryId}`,
-        target: 'available-money',
-        value: income.amount
-      });
-    });
-
-    // Create links from "Available Money" to expense parent categories
-    incomeExpenseData.expenses.forEach(expense => {
-      links.push({
-        source: 'available-money',
-        target: `expense-parent-${expense.categoryId}`,
-        value: expense.amount
-      });
-    });
-
-    // Create links from expense parent categories to their children
-    expenseChildCategories.forEach(childCategory => {
-      if (childCategory.parentCategoryId) {
-        links.push({
-          source: `expense-parent-${childCategory.parentCategoryId}`,
-          target: `expense-child-${childCategory.categoryId}`,
-          value: childCategory.amount
+    // Add child categories as nodes (right side) - sorted by amount descending
+    expenseChildCategories
+      .sort((a, b) => b.amount - a.amount) // Sort by amount descending (highest to lowest)
+      .forEach(category => {
+        nodes.push({
+          id: `expense-child-${category.categoryId}`,
+          name: category.categoryName,
+          category: 'expense-child'
         });
-      }
-    });
+      });
+
+    // Create links from income to "Available Money" - in sorted order
+    incomeExpenseData.income
+      .sort((a, b) => b.amount - a.amount) // Same sort order as nodes
+      .forEach(income => {
+        links.push({
+          source: `income-${income.categoryId}`,
+          target: 'available-money',
+          value: income.amount
+        });
+      });
+
+    // Create links from "Available Money" to expense parent categories - in sorted order
+    incomeExpenseData.expenses
+      .sort((a, b) => b.amount - a.amount) // Same sort order as nodes
+      .forEach(expense => {
+        links.push({
+          source: 'available-money',
+          target: `expense-parent-${expense.categoryId}`,
+          value: expense.amount
+        });
+      });
+
+    // Create links from expense parent categories to their children - in sorted order
+    expenseChildCategories
+      .sort((a, b) => b.amount - a.amount) // Same sort order as nodes
+      .forEach(childCategory => {
+        if (childCategory.parentCategoryId) {
+          links.push({
+            source: `expense-parent-${childCategory.parentCategoryId}`,
+            target: `expense-child-${childCategory.categoryId}`,
+            value: childCategory.amount
+          });
+        }
+      });
 
     // If we don't have income data yet, create a dummy income source
     if (incomeExpenseData.income.length === 0 && incomeExpenseData.expenses.length > 0) {
@@ -568,8 +580,8 @@ const Summary = () => {
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <D3PieChart 
                 data={categorySummary} 
-                width={600} 
-                height={500} 
+                width={800} 
+                height={700} 
               />
             </div>
           )}

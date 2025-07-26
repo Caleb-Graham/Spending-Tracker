@@ -31,7 +31,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear previous render
 
-    const margin = { top: 20, right: 20, bottom: 160, left: 20 };
+    const margin = { top: 20, right: 20, bottom: 20, left: 20 };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
     const radius = Math.min(innerWidth, innerHeight) / 2;
@@ -106,47 +106,47 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
         d3.selectAll(".d3-pie-tooltip").remove();
       });
 
-    // Add labels (only for slices > 5%)
+    // Add labels for all slices
     arcs.append("text")
       .attr("transform", (d: any) => `translate(${labelArc.centroid(d)})`)
       .attr("dy", "0.35em")
       .attr("text-anchor", "middle")
-      .attr("font-family", "sans-serif")
-      .attr("font-size", "11px")
+      .attr("font-family", "Arial, sans-serif")
+      .attr("font-size", (d: any) => d.data.percentage > 8 ? "13px" : d.data.percentage > 3 ? "11px" : "9px")
       .attr("fill", "white")
-      .attr("font-weight", "bold")
-      .style("text-shadow", "1px 1px 2px rgba(0,0,0,0.7)")
-      .text((d: any) => d.data.percentage > 5 ? `${d.data.percentage.toFixed(1)}%` : "");
-
-    // Create legend
-    const legend = svg.append("g")
-      .attr("class", "legend")
-      .attr("transform", `translate(20, ${height - margin.bottom + 30})`);
-
-    const legendItems = legend.selectAll(".legend-item")
-      .data(data)
-      .enter().append("g")
-      .attr("class", "legend-item")
-      .attr("transform", (d, i) => {
-        const itemsPerRow = Math.floor((innerWidth + 40) / 160); // Adjust for wider spacing
-        const row = Math.floor(i / itemsPerRow);
-        const col = i % itemsPerRow;
-        return `translate(${col * 160}, ${row * 24})`; // Increase vertical spacing even more
+      .attr("font-weight", "700")
+      .style("text-shadow", "1px 1px 1px rgba(0,0,0,0.5)")
+      .style("pointer-events", "none")
+      .each(function(d: any) {
+        const text = d3.select(this);
+        const lines = [];
+        
+        // For larger slices, show category name and percentage
+        if (d.data.percentage > 8) {
+          lines.push(d.data.categoryName);
+          lines.push(`${d.data.percentage.toFixed(1)}%`);
+        } 
+        // For medium slices, show abbreviated name and percentage
+        else if (d.data.percentage > 3) {
+          const shortName = d.data.categoryName.length > 12 
+            ? d.data.categoryName.substring(0, 10) + "..." 
+            : d.data.categoryName;
+          lines.push(shortName);
+          lines.push(`${d.data.percentage.toFixed(1)}%`);
+        }
+        // For small slices, just show percentage
+        else if (d.data.percentage > 1.5) {
+          lines.push(`${d.data.percentage.toFixed(1)}%`);
+        }
+        
+        // Add each line as a tspan
+        lines.forEach((line, i) => {
+          text.append("tspan")
+            .attr("x", 0)
+            .attr("dy", i === 0 ? 0 : "1.2em")
+            .text(line);
+        });
       });
-
-    legendItems.append("rect")
-      .attr("width", 12)
-      .attr("height", 12)
-      .attr("fill", (d, i) => color(i.toString()));
-
-    legendItems.append("text")
-      .attr("x", 18)
-      .attr("y", 9)
-      .attr("dy", "0.35em")
-      .attr("font-family", "sans-serif")
-      .attr("font-size", "12px")
-      .attr("fill", "#333")
-      .text((d: any) => `${d.categoryName} (${d.percentage.toFixed(1)}%)`);
 
   }, [data, width, height]);
 
