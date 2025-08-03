@@ -35,6 +35,7 @@ builder.Services.AddCors(options =>
 // Register services
 builder.Services.AddScoped<TransactionMethods>();
 builder.Services.AddScoped<CategoryMethods>();
+builder.Services.AddScoped<NetWorthMethods>();
 
 var app = builder.Build();
 
@@ -51,5 +52,6 @@ app.UseHttpsRedirection();
 // Map API endpoints
 app.MapTransactionFunctions();
 app.MapCategoryFunctions();
+app.MapNetWorthFunctions();
 
 app.Run();
