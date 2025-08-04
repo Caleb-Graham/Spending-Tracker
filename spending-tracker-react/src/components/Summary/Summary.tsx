@@ -361,7 +361,6 @@ const Summary = () => {
         
         {/* Date Range Controls */}
         <div className="summary-header">
-          <div style={{ flex: 1 }}></div> {/* Spacer to push content to the right */}
           <FormControl className="date-selector" size="small">
             <InputLabel id="date-range-label">Date Range</InputLabel>
             <Select

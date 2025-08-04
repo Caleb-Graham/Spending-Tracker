@@ -13,8 +13,7 @@ public class SpendingDbContext : DbContext
     public DbSet<Transaction> Transactions { get; set; }
     public DbSet<Category> Categories { get; set; }
     public DbSet<Account> Accounts { get; set; }
-    public DbSet<NetWorthSnapshot> NetWorthSnapshots { get; set; }
-    public DbSet<NetWorthAsset> NetWorthAssets { get; set; }
+    public DbSet<NetWorth> NetWorth { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -63,28 +62,17 @@ public class SpendingDbContext : DbContext
             entity.HasIndex(a => a.Name).IsUnique();
         });
 
-        // Configure NetWorthSnapshot
-        modelBuilder.Entity<NetWorthSnapshot>(entity =>
+        // Configure NetWorth
+        modelBuilder.Entity<NetWorth>(entity =>
         {
-            entity.HasKey(e => e.SnapshotId);
-            entity.Property(s => s.NetWorth)
+            entity.HasKey(e => e.Id);
+            entity.Property(s => s.NetWorthTotal)
                 .HasColumnType("decimal(18,2)");
-            entity.Property(s => s.DollarChange)
-                .HasColumnType("decimal(18,2)");
-            entity.HasIndex(s => s.Date).IsUnique();
-        });
-
-        // Configure NetWorthAsset
-        modelBuilder.Entity<NetWorthAsset>(entity =>
-        {
-            entity.HasKey(e => e.AssetId);
-            entity.Property(a => a.Value)
+            entity.Property(s => s.AccountValue)
                 .HasColumnType("decimal(18,2)");
 
-            entity.HasOne(a => a.Snapshot)
-                .WithMany(s => s.Assets)
-                .HasForeignKey(a => a.SnapshotId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // Create composite index for efficient querying
+            entity.HasIndex(s => new { s.Date, s.AccountName });
         });
 
         // Seed initial account only

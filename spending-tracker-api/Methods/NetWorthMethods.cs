@@ -17,7 +17,7 @@ public class NetWorthMethods
     {
         try
         {
-            var query = _context.NetWorthSnapshots.AsQueryable();
+            var query = _context.NetWorth.AsQueryable();
 
             // Filter by date range if provided
             if (startDate.HasValue)
@@ -29,18 +29,25 @@ public class NetWorthMethods
                 query = query.Where(s => s.Date <= endDate.Value);
             }
 
-            return await query
+            // Get all records and process in memory
+            var allRecords = await query.ToListAsync();
+
+            // Group by date and get one representative record per date
+            var snapshots = allRecords
+                .GroupBy(n => n.Date)
+                .Select(g => g.OrderBy(n => n.Id).First())
                 .OrderBy(s => s.Date)
-                .Select(s => new NetWorthSnapshotDto
-                {
-                    SnapshotId = s.SnapshotId,
-                    Date = s.Date,
-                    NetWorth = s.NetWorth,
-                    PercentageChange = s.PercentageChange,
-                    DollarChange = s.DollarChange,
-                    Notes = s.Notes
-                })
-                .ToListAsync();
+                .ToList();
+
+            return snapshots.Select(s => new NetWorthSnapshotDto
+            {
+                SnapshotId = s.Id,
+                Date = s.Date,
+                NetWorth = s.NetWorthTotal,
+                PercentageChange = null, // Calculate in frontend
+                DollarChange = null, // Calculate in frontend
+                Notes = s.Notes
+            });
         }
         catch (Exception ex)
         {
@@ -52,30 +59,35 @@ public class NetWorthMethods
     {
         try
         {
-            var snapshot = await _context.NetWorthSnapshots
-                .Include(s => s.Assets)
-                .FirstOrDefaultAsync(s => s.SnapshotId == snapshotId);
+            // Find the date for this snapshot ID
+            var snapshotRecord = await _context.NetWorth
+                .FirstOrDefaultAsync(n => n.Id == snapshotId);
 
-            if (snapshot == null)
+            if (snapshotRecord == null)
             {
                 return null;
             }
 
+            // Get all records for this date (compare date part only)
+            var allRecords = await _context.NetWorth
+                .Where(n => n.Date.Date == snapshotRecord.Date.Date)
+                .ToListAsync();
+
             return new NetWorthDetailDto
             {
-                SnapshotId = snapshot.SnapshotId,
-                Date = snapshot.Date,
-                NetWorth = snapshot.NetWorth,
-                PercentageChange = snapshot.PercentageChange,
-                DollarChange = snapshot.DollarChange,
-                Notes = snapshot.Notes,
-                Assets = snapshot.Assets.Select(a => new NetWorthAssetDto
+                SnapshotId = snapshotRecord.Id,
+                Date = snapshotRecord.Date,
+                NetWorth = snapshotRecord.NetWorthTotal,
+                PercentageChange = null,
+                DollarChange = null,
+                Notes = snapshotRecord.Notes,
+                Assets = allRecords.Select(r => new NetWorthAssetDto
                 {
-                    AssetId = a.AssetId,
-                    Category = a.Category,
-                    Name = a.Name,
-                    Value = a.Value,
-                    IsAsset = a.IsAsset
+                    AssetId = r.Id,
+                    Category = r.AccountCategory,
+                    Name = r.AccountName,
+                    Value = r.AccountValue,
+                    IsAsset = r.IsAsset
                 }).ToList()
             };
         }
@@ -89,29 +101,34 @@ public class NetWorthMethods
     {
         try
         {
-            var snapshot = await _context.NetWorthSnapshots
-                .Include(s => s.Assets)
-                .FirstOrDefaultAsync(s => s.SnapshotId == snapshotId);
+            // Find the date for this snapshot ID
+            var snapshotRecord = await _context.NetWorth
+                .FirstOrDefaultAsync(n => n.Id == snapshotId);
 
-            if (snapshot == null)
+            if (snapshotRecord == null)
             {
                 throw new Exception("Net worth snapshot not found");
             }
 
-            var categoryTotals = snapshot.Assets
-                .GroupBy(a => new { a.Category, a.IsAsset })
+            // Get all records for this date (compare date part only)
+            var allRecords = await _context.NetWorth
+                .Where(n => n.Date.Date == snapshotRecord.Date.Date)
+                .ToListAsync();
+
+            var categoryTotals = allRecords
+                .GroupBy(r => new { r.AccountCategory, r.IsAsset })
                 .Select(g => new NetWorthCategoryDto
                 {
-                    Category = g.Key.Category,
+                    Category = g.Key.AccountCategory,
                     IsAsset = g.Key.IsAsset,
-                    TotalValue = g.Sum(a => a.Value),
-                    Items = g.Select(a => new NetWorthAssetDto
+                    TotalValue = g.Sum(r => r.AccountValue),
+                    Items = g.Select(r => new NetWorthAssetDto
                     {
-                        AssetId = a.AssetId,
-                        Category = a.Category,
-                        Name = a.Name,
-                        Value = a.Value,
-                        IsAsset = a.IsAsset
+                        AssetId = r.Id,
+                        Category = r.AccountCategory,
+                        Name = r.AccountName,
+                        Value = r.AccountValue,
+                        IsAsset = r.IsAsset
                     }).OrderByDescending(a => Math.Abs(a.Value)).ToList()
                 })
                 .OrderByDescending(c => c.IsAsset)
@@ -120,9 +137,9 @@ public class NetWorthMethods
 
             return new NetWorthCategorySummaryDto
             {
-                SnapshotId = snapshot.SnapshotId,
-                Date = snapshot.Date,
-                NetWorth = snapshot.NetWorth,
+                SnapshotId = snapshotRecord.Id,
+                Date = snapshotRecord.Date,
+                NetWorth = snapshotRecord.NetWorthTotal,
                 Categories = categoryTotals
             };
         }
@@ -137,50 +154,49 @@ public class NetWorthMethods
         try
         {
             // Check if a snapshot already exists for this date
-            var existingSnapshot = await _context.NetWorthSnapshots
-                .FirstOrDefaultAsync(s => s.Date.Date == request.Date.Date);
+            var existingRecords = await _context.NetWorth
+                .Where(n => n.Date.Date == request.Date.Date)
+                .ToListAsync();
 
-            if (existingSnapshot != null)
+            if (existingRecords.Any())
             {
                 throw new Exception($"A net worth snapshot already exists for {request.Date:yyyy-MM-dd}");
             }
 
-            var snapshot = new NetWorthSnapshot
+            var newRecords = new List<NetWorth>();
+            int firstId = 0;
+
+            // Create a record for each asset
+            foreach (var asset in request.Assets)
             {
+                var record = new NetWorth
+                {
+                    Date = request.Date,
+                    NetWorthTotal = request.NetWorth,
+                    Notes = request.Notes,
+                    AccountName = asset.Name,
+                    AccountCategory = asset.Category,
+                    AccountValue = asset.Value,
+                    IsAsset = asset.IsAsset
+                };
+
+                _context.NetWorth.Add(record);
+                newRecords.Add(record);
+            }
+
+            await _context.SaveChangesAsync();
+
+            // Return the first record's ID as the snapshot ID
+            firstId = newRecords.First().Id;
+
+            return new NetWorthSnapshotDto
+            {
+                SnapshotId = firstId,
                 Date = request.Date,
                 NetWorth = request.NetWorth,
                 PercentageChange = request.PercentageChange,
                 DollarChange = request.DollarChange,
                 Notes = request.Notes
-            };
-
-            _context.NetWorthSnapshots.Add(snapshot);
-            await _context.SaveChangesAsync();
-
-            // Add assets
-            foreach (var asset in request.Assets)
-            {
-                var netWorthAsset = new NetWorthAsset
-                {
-                    SnapshotId = snapshot.SnapshotId,
-                    Category = asset.Category,
-                    Name = asset.Name,
-                    Value = asset.Value,
-                    IsAsset = asset.IsAsset
-                };
-                _context.NetWorthAssets.Add(netWorthAsset);
-            }
-
-            await _context.SaveChangesAsync();
-
-            return new NetWorthSnapshotDto
-            {
-                SnapshotId = snapshot.SnapshotId,
-                Date = snapshot.Date,
-                NetWorth = snapshot.NetWorth,
-                PercentageChange = snapshot.PercentageChange,
-                DollarChange = snapshot.DollarChange,
-                Notes = snapshot.Notes
             };
         }
         catch (Exception ex)
@@ -193,16 +209,21 @@ public class NetWorthMethods
     {
         try
         {
-            var snapshot = await _context.NetWorthSnapshots
-                .Include(s => s.Assets)
-                .FirstOrDefaultAsync(s => s.SnapshotId == snapshotId);
+            // Find the date for this snapshot ID
+            var snapshotRecord = await _context.NetWorth
+                .FirstOrDefaultAsync(n => n.Id == snapshotId);
 
-            if (snapshot == null)
+            if (snapshotRecord == null)
             {
                 return false;
             }
 
-            _context.NetWorthSnapshots.Remove(snapshot);
+            // Delete all records for this date
+            var allRecords = await _context.NetWorth
+                .Where(n => n.Date == snapshotRecord.Date)
+                .ToListAsync();
+
+            _context.NetWorth.RemoveRange(allRecords);
             await _context.SaveChangesAsync();
             return true;
         }

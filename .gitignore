@@ -23,10 +23,11 @@ build/
 .env.test.local
 .env.production.local
 
-# Database
+# Database files (keep only spending.db in API folder)
 *.db
 *.db-shm
 *.db-wal
+!spending-tracker-api/spending.db
 
 # IDE
 .idea/
