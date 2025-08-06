@@ -435,6 +435,7 @@ const Categories = () => {
   const handleMoveChild = async (childId: number, newParentId: number) => {
     try {
       const childMapping = categoryMappings.find(m => m.id === childId);
+      
       if (!childMapping) {
         showNotification('Child category not found', 'error');
         return;
