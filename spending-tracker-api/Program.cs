@@ -37,6 +37,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<TransactionMethods>();
 builder.Services.AddScoped<CategoryMethods>();
 builder.Services.AddScoped<NetWorthMethods>();
+builder.Services.AddScoped<SpendingTrackerApi.Services.IPlanningService, SpendingTrackerApi.Services.PlanningService>();
 
 var app = builder.Build();
 
@@ -59,5 +60,6 @@ if (!app.Environment.IsDevelopment())
 app.MapTransactionFunctions();
 app.MapCategoryFunctions();
 app.MapNetWorthFunctions();
+SpendingTrackerApi.Endpoints.PlanningEndpoints.MapPlanningEndpoints(app);
 
 app.Run();

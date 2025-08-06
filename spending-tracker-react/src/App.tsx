@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import Sidebar from './components/Sidebar/Sidebar';
@@ -9,11 +9,17 @@ import NetWorth from './components/NetWorth/NetWorth';
 import Planning from './components/Planning/Planning';
 
 function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
   return (
     <Router>
       <div className="App">
-        <Sidebar />
-        <div className="main-content">
+        <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+        <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
           <Routes>
             <Route path="/" element={<Navigate to="/summary" replace />} />
             <Route path="/summary" element={<Summary />} />

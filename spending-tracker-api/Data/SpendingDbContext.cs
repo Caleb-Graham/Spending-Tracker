@@ -14,6 +14,7 @@ public class SpendingDbContext : DbContext
     public DbSet<Category> Categories { get; set; }
     public DbSet<Account> Accounts { get; set; }
     public DbSet<NetWorth> NetWorth { get; set; }
+    public DbSet<PlanningBudget> PlanningBudgets { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,6 +74,22 @@ public class SpendingDbContext : DbContext
 
             // Create composite index for efficient querying
             entity.HasIndex(s => new { s.Date, s.AccountName });
+        });
+
+        // Configure PlanningBudget
+        modelBuilder.Entity<PlanningBudget>(entity =>
+        {
+            entity.HasKey(e => e.PlanningBudgetId);
+            entity.Property(p => p.PlannedAmount)
+                .HasColumnType("decimal(18,2)");
+
+            entity.HasOne(p => p.Category)
+                .WithMany()
+                .HasForeignKey(p => p.CategoryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Create unique constraint on CategoryId and Year combination
+            entity.HasIndex(p => new { p.CategoryId, p.Year }).IsUnique();
         });
 
         // Seed initial account only

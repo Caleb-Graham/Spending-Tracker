@@ -9,6 +9,22 @@
   border-right: 1px solid #dee2e6;
   box-sizing: border-box;
   z-index: 1;
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 80px;
+  padding: 20px 10px;
+}
+
+.sidebar-header {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sidebar.collapsed .sidebar-header {
+  justify-content: center;
 }
 
 .sidebar-menu {
@@ -25,12 +41,58 @@
   text-decoration: none;
   color: #333;
   font-size: 16px;
-  display: block;
+  display: flex;
+  align-items: center;
   padding: 10px;
   border-radius: 5px;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  position: relative;
 }
 
 .sidebar-menu a:hover {
   background-color: #e9ecef;
+}
+
+.nav-icon {
+  font-size: 20px;
+  margin-right: 10px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.sidebar.collapsed .nav-icon {
+  margin-right: 0;
+}
+
+.nav-text {
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar.collapsed .nav-text {
+  opacity: 0;
+  width: 0;
+}
+
+/* Tooltip for collapsed state */
+.sidebar.collapsed .sidebar-menu a {
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-menu a:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: #333;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-left: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }

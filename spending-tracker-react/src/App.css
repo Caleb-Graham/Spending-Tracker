@@ -11,6 +11,12 @@
   margin-left: 250px; /* This should match the sidebar width */
   box-sizing: border-box;
   width: calc(100% - 250px);
+  transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+.main-content.sidebar-collapsed {
+  margin-left: 80px; /* This should match the collapsed sidebar width */
+  width: calc(100% - 80px);
 }
 
 .App-logo {
