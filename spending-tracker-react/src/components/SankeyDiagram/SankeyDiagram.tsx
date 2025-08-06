@@ -144,9 +144,22 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
           .style("pointer-events", "none")
           .style("z-index", 1000);
 
+       
+        // Calculate total income for percentage calculation
+        const totalIncome = data.links
+          .filter(link => {
+            const sourceNode = data.nodes.find(n => n.id === link.source);
+            return sourceNode?.category === 'income';
+          })
+          .reduce((sum, link) => sum + link.value, 0);
+
+        const percentage = totalIncome > 0 ? (d.value / totalIncome * 100) : 0;
+
         tooltip.html(`
           <div><strong>${d.source.name}</strong> → <strong>${d.target.name}</strong></div>
-          <div>$${d.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div>Amount: $${d.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div style="color: #90EE90; font-weight: bold;">Percentage: ${percentage.toFixed(1)}%</div>
+          <div style="font-size: 11px; opacity: 0.8;">of $${totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total income</div>
         `)
         .style("left", (event.pageX + 10) + "px")
         .style("top", (event.pageY - 10) + "px");
@@ -193,9 +206,21 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
           }
         }
 
+         // Calculate total income for percentage calculation
+        const totalIncome = data.links
+          .filter(link => {
+            const sourceNode = data.nodes.find(n => n.id === link.source);
+            return sourceNode?.category === 'income';
+          })
+          .reduce((sum, link) => sum + link.value, 0);
+
+        const percentage = totalIncome > 0 ? (displayValue / totalIncome * 100) : 0;
+
         tooltip.html(`
           <div><strong>${d.name}</strong></div>
-          <div>Total: $${displayValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div>Amount: $${displayValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div style="color: #90EE90; font-weight: bold;">Percentage: ${percentage.toFixed(1)}%</div>
+          <div style="font-size: 11px; opacity: 0.8;">of $${totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total income</div>
         `)
         .style("left", (event.pageX + 10) + "px")
         .style("top", (event.pageY - 10) + "px");
