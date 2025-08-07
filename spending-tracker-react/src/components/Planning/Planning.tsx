@@ -18,15 +18,22 @@ import {
   InputAdornment,
   LinearProgress,
   Collapse,
-  IconButton
+  IconButton,
+  Modal,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Save as SaveIcon,
   Calculate as CalculateIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  ExpandLess as ExpandLessIcon,
+  PieChart as PieChartIcon
 } from '@mui/icons-material';
 import { getAllCategories, getParentCategories, getCategoryMappings, planningService, type Category, type CategoryMapping, type PlanningBudget } from '../../services';
+import D3PieChart from '../D3PieChart/D3PieChart';
 import './Planning.css';
 
 interface PlanningData {
@@ -56,22 +63,30 @@ const Planning = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [savingStates, setSavingStates] = useState<Set<number>>(new Set());
-  const [viewMode, setViewMode] = useState<'monthly' | 'yearly'>('monthly');
+  const [viewMode, setViewMode] = useState<'monthly' | 'yearly' | 'weekly'>('monthly');
   const [inputValues, setInputValues] = useState<Record<number, string>>({});
+  const [showPieChart, setShowPieChart] = useState(false);
 
   const currentYear = new Date().getFullYear();
 
   // Helper function to convert between monthly and yearly amounts
-  const convertAmount = (amount: number, fromMode: 'monthly' | 'yearly', toMode: 'monthly' | 'yearly'): number => {
+  const convertAmount = (amount: number, fromMode: 'monthly' | 'yearly' | 'weekly', toMode: 'monthly' | 'yearly' | 'weekly'): number => {
     if (fromMode === toMode) return amount;
     if (fromMode === 'monthly' && toMode === 'yearly') return amount * 12;
     if (fromMode === 'yearly' && toMode === 'monthly') return amount / 12;
+    if (fromMode === 'monthly' && toMode === 'weekly') return amount / 4.33; // Average weeks per month
+    if (fromMode === 'weekly' && toMode === 'monthly') return amount * 4.33;
+    if (fromMode === 'weekly' && toMode === 'yearly') return amount * 52;
+    if (fromMode === 'yearly' && toMode === 'weekly') return amount / 52;
     return amount;
   };
 
   // Helper function to get display amount based on current view mode
   const getDisplayAmount = (monthlyAmount: number): number => {
-    return viewMode === 'monthly' ? monthlyAmount : monthlyAmount * 12;
+    if (viewMode === 'monthly') return monthlyAmount;
+    if (viewMode === 'yearly') return monthlyAmount * 12;
+    if (viewMode === 'weekly') return monthlyAmount / 4.33; // Average weeks per month
+    return monthlyAmount;
   };
 
   // Helper function to format currency input
@@ -109,7 +124,9 @@ const Planning = () => {
     const inputValue = inputValues[categoryId];
     if (inputValue !== undefined) {
       const numericValue = parseCurrencyInput(inputValue);
-      const monthlyAmount = viewMode === 'monthly' ? numericValue : numericValue / 12;
+      const monthlyAmount = viewMode === 'monthly' ? numericValue : 
+                           viewMode === 'yearly' ? numericValue / 12 : 
+                           numericValue * 4.33; // weekly to monthly
       
       // Update the planning data
       setPlanningData(prev => ({
@@ -164,6 +181,11 @@ const Planning = () => {
   useEffect(() => {
     loadCategoriesData();
   }, []);
+
+  // Clear input cache when view mode changes to force recalculation of display values
+  useEffect(() => {
+    setInputValues({});
+  }, [viewMode]);
 
   const loadCategoriesData = async () => {
     try {
@@ -280,7 +302,9 @@ const Planning = () => {
     // Parse and update the numeric value
     const enteredAmount = parseCurrencyInput(value);
     // Store as monthly amount in state
-    const monthlyAmount = viewMode === 'monthly' ? enteredAmount : enteredAmount / 12;
+    const monthlyAmount = viewMode === 'monthly' ? enteredAmount : 
+                         viewMode === 'yearly' ? enteredAmount / 12 : 
+                         enteredAmount * 4.33; // weekly to monthly
     
     setPlanningData(prev => ({
       ...prev,
@@ -289,6 +313,16 @@ const Planning = () => {
         plannedAmount: monthlyAmount
       }
     }));
+    
+    // Clear any cached parent input value so it shows the calculated sum
+    const parentMapping = categoryMappings.find(mapping => mapping.categoryId === categoryId);
+    if (parentMapping) {
+      setInputValues(prevInputs => {
+        const newInputs = { ...prevInputs };
+        delete newInputs[parentMapping.parentCategoryId];
+        return newInputs;
+      });
+    }
     
     // Auto-save the monthly amount
     debouncedAutoSave(categoryId, monthlyAmount);
@@ -306,7 +340,39 @@ const Planning = () => {
     // Parse and update the numeric value
     const enteredAmount = parseCurrencyInput(value);
     // Store as monthly amount in state
-    const monthlyAmount = viewMode === 'monthly' ? enteredAmount : enteredAmount / 12;
+    const monthlyAmount = viewMode === 'monthly' ? enteredAmount : 
+                         viewMode === 'yearly' ? enteredAmount / 12 : 
+                         enteredAmount * 4.33; // weekly to monthly
+    
+    // If user is entering a manual amount and there are children with amounts, clear the children
+    const childMappings = getChildCategories(parentId);
+    const hasChildrenWithAmounts = childMappings.some(mapping => 
+      (planningData[mapping.categoryId]?.plannedAmount || 0) > 0
+    );
+    
+    if (enteredAmount > 0 && hasChildrenWithAmounts) {
+      // Clear all children amounts
+      setPlanningData(prev => {
+        const newData = { ...prev };
+        childMappings.forEach(mapping => {
+          if (newData[mapping.categoryId]) {
+            newData[mapping.categoryId] = {
+              ...newData[mapping.categoryId],
+              plannedAmount: 0
+            };
+          }
+          // Also clear from input values
+          setInputValues(prevInputs => {
+            const newInputs = { ...prevInputs };
+            delete newInputs[mapping.categoryId];
+            return newInputs;
+          });
+          // Auto-save the cleared amounts
+          debouncedAutoSave(mapping.categoryId, 0);
+        });
+        return newData;
+      });
+    }
     
     setParentPlanningData(prev => ({
       ...prev,
@@ -318,15 +384,6 @@ const Planning = () => {
     
     // Auto-save the monthly amount
     debouncedAutoSave(parentId, monthlyAmount);
-    
-    // Auto-collapse when parent amount is set
-    if (monthlyAmount > 0) {
-      setExpandedParents(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(parentId);
-        return newSet;
-      });
-    }
   };
 
   const toggleParentExpanded = (parentId: number) => {
@@ -513,7 +570,68 @@ const Planning = () => {
   const hasManualParentAmount = (parentId: number): boolean => {
     const manualAmount = parentPlanningData[parentId]?.plannedAmount || 0;
     const calculatedAmount = getParentAmountFromChildren(parentId);
-    return manualAmount > 0 && Math.abs(manualAmount - calculatedAmount) > 0.01; // Allow for small rounding differences
+    
+    // If there are children with amounts, prioritize showing the sum (not manual)
+    if (calculatedAmount > 0) {
+      return false;
+    }
+    
+    // Only consider it manual if there's a manual amount and no children amounts
+    return manualAmount > 0;
+  };
+
+  // Helper function to get category amount and percentage
+  const getCategoryAmountAndPercentage = (categoryId: number, type: string, isParent: boolean = false) => {
+    let monthlyAmount = 0;
+    if (isParent) {
+      const parentMonthlyAmount = parentPlanningData[categoryId]?.plannedAmount || 0;
+      const calculatedFromChildren = getParentAmountFromChildren(categoryId);
+      const hasManualAmount = hasManualParentAmount(categoryId);
+      monthlyAmount = hasManualAmount ? parentMonthlyAmount : calculatedFromChildren;
+    } else {
+      monthlyAmount = planningData[categoryId]?.plannedAmount || 0;
+    }
+    
+    const yearlyAmount = monthlyAmount * 12;
+    const { totalIncome, totalExpenses } = calculateTotals();
+    const total = type === 'Income' ? totalIncome : totalExpenses;
+    const percentage = total > 0 ? (yearlyAmount / total) * 100 : 0;
+    
+    return { yearlyAmount, percentage };
+  };
+
+  // Helper function to get pie chart data for expenses
+  const getPieChartData = () => {
+    const expenseData: Array<{categoryId: number, categoryName: string, amount: number, percentage: number}> = [];
+
+    // Add parent categories
+    expenseParents.forEach(parent => {
+      const { yearlyAmount, percentage } = getCategoryAmountAndPercentage(parent.categoryId, parent.type, true);
+      if (yearlyAmount > 0) {
+        expenseData.push({
+          categoryId: parent.categoryId,
+          categoryName: parent.name,
+          amount: yearlyAmount,
+          percentage: percentage
+        });
+      }
+    });
+
+    // Add standalone categories
+    const standaloneExpenses = getStandaloneCategories('Expense');
+    standaloneExpenses.forEach(category => {
+      const { yearlyAmount, percentage } = getCategoryAmountAndPercentage(category.categoryId, category.type, false);
+      if (yearlyAmount > 0) {
+        expenseData.push({
+          categoryId: category.categoryId,
+          categoryName: category.name,
+          amount: yearlyAmount,
+          percentage: percentage
+        });
+      }
+    });
+
+    return expenseData.sort((a, b) => b.amount - a.amount);
   };
 
   // Render a parent category with its children
@@ -529,15 +647,18 @@ const Planning = () => {
     
     const hasParentAmount = effectiveParentAmount > 0;
     const isExpanded = expandedParents.has(parent.categoryId);
-    const showChildren = !hasManualAmount && childMappings.length > 0;
+    const showChildren = childMappings.length > 0;
+    
+    // Get percentage
+    const { percentage } = getCategoryAmountAndPercentage(parent.categoryId, parent.type, true);
     
     return (
-      <Box key={parent.categoryId} sx={{ mb: 3 }}>
+      <Box key={parent.categoryId} sx={{ mb: 2 }}> {/* Reduced margin */}
         {/* Parent Category Header and Input */}
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <Box sx={{ mb: 1 }}> {/* Reduced margin */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}> {/* Reduced margin */}
             <Typography 
-              variant="h6" 
+              variant="subtitle1" // Smaller typography
               sx={{ 
                 color: '#666',
                 fontWeight: 'bold',
@@ -547,7 +668,23 @@ const Planning = () => {
               {parent.name}
             </Typography>
             
-            {/* Expand/Collapse Button - only show if there are children and no parent amount */}
+            {/* Percentage Display */}
+            {hasParentAmount && (
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: '#888',
+                  fontWeight: 'bold',
+                  fontSize: '0.75rem',
+                  minWidth: '45px',
+                  textAlign: 'right'
+                }}
+              >
+                {percentage.toFixed(1)}%
+              </Typography>
+            )}
+            
+            {/* Expand/Collapse Button */}
             {showChildren && (
               <IconButton
                 size="small"
@@ -565,19 +702,21 @@ const Planning = () => {
           {/* Parent Category Amount Input */}
           <TextField
             fullWidth
-            label={`Total ${parent.name} Budget (${viewMode === 'monthly' ? 'Monthly' : 'Yearly'})`}
+            label={`${parent.name} (${viewMode === 'monthly' ? 'Monthly' : viewMode === 'yearly' ? 'Yearly' : 'Weekly'})`} // Shorter label
             type="text"
-            value={inputValues[parent.categoryId] !== undefined 
-              ? inputValues[parent.categoryId] 
-              : (parentDisplayAmount === 0 ? '' : formatCurrencyInput(parentDisplayAmount))
+            value={
+              // If there are children with amounts, always show the calculated sum (ignore cached input)
+              calculatedFromChildren > 0 
+                ? (inputValues[parent.categoryId] !== undefined 
+                    ? inputValues[parent.categoryId] 
+                    : formatCurrencyInput(getDisplayAmount(calculatedFromChildren)))
+                : (inputValues[parent.categoryId] !== undefined 
+                    ? inputValues[parent.categoryId] 
+                    : (effectiveParentAmount === 0 ? '' : formatCurrencyInput(getDisplayAmount(effectiveParentAmount))))
             }
             onChange={(e) => handleParentAmountChange(parent.categoryId, e.target.value)}
             onBlur={() => handleAmountBlur(parent.categoryId)}
             onFocus={(e) => handleAmountFocus(parent.categoryId, e.target.value)}
-            placeholder={calculatedFromChildren > 0 && !hasManualAmount ? 
-              `Sum of children: ${formatCurrencyInput(getDisplayAmount(calculatedFromChildren))}` : 
-              undefined
-            }
             InputProps={{
               startAdornment: <InputAdornment position="start">$</InputAdornment>,
               endAdornment: savingStates.has(parent.categoryId) ? (
@@ -591,91 +730,89 @@ const Planning = () => {
             variant="outlined"
             size="small"
             sx={{ 
-              maxWidth: 300,
-              mb: 2,
-              backgroundColor: hasParentAmount ? (hasManualAmount ? '#e8f5e8' : '#f0f8ff') : 'transparent',
-              '& .MuiOutlinedInput-root': {
-                '& fieldset': {
-                  borderColor: hasParentAmount ? (hasManualAmount ? '#4caf50' : '#2196f3') : undefined,
-                  borderWidth: hasParentAmount ? 2 : 1,
-                }
-              }
+              maxWidth: 280, // Slightly smaller
+              mb: 1, // Reduced margin
             }}
           />
-          
-          {hasManualAmount && calculatedFromChildren > 0 && (
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: '#ff9800', 
-                fontSize: '0.75rem',
-                fontStyle: 'italic',
-                ml: 1
-              }}
-            >
-              Manual override (child sum: {formatCurrencyInput(getDisplayAmount(calculatedFromChildren))})
-            </Typography>
-          )}
         </Box>
 
         {/* Child Categories - collapsible */}
         {showChildren && (
           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
             <Box>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  mb: 1, 
-                  color: '#888',
-                  fontStyle: 'italic'
-                }}
-              >
-                Individual {parent.name} Categories:
-              </Typography>
               <Box 
                 sx={{ 
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                  gap: 2,
-                  ml: 2,
-                  p: 2,
-                  backgroundColor: '#fafafa',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', // Smaller min width
+                  gap: 1.5, // Reduced gap
+                  ml: 1, // Reduced margin
+                  p: 1.5, // Reduced padding
+                  backgroundColor: '#f8f9fa',
                   borderRadius: 1,
-                  border: '1px solid #e0e0e0'
+                  border: '1px solid #dee2e6'
                 }}
               >
-                {childMappings.map((mapping) => {
-                  const childMonthlyAmount = planningData[mapping.categoryId]?.plannedAmount || 0;
-                  const childDisplayAmount = getDisplayAmount(childMonthlyAmount);
-                  
-                  return (
-                    <TextField
-                      key={mapping.categoryId}
-                      fullWidth
-                      label={`${mapping.categoryName} (${viewMode === 'monthly' ? 'Monthly' : 'Yearly'})`}
-                      type="text"
-                      value={inputValues[mapping.categoryId] !== undefined 
-                        ? inputValues[mapping.categoryId] 
-                        : (childDisplayAmount === 0 ? '' : formatCurrencyInput(childDisplayAmount))
-                      }
-                      onChange={(e) => handleAmountChange(mapping.categoryId, e.target.value)}
-                      onBlur={() => handleAmountBlur(mapping.categoryId)}
-                      onFocus={(e) => handleAmountFocus(mapping.categoryId, e.target.value)}
-                      InputProps={{
-                        startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                        endAdornment: savingStates.has(mapping.categoryId) ? (
-                          <InputAdornment position="end">
-                            <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem' }}>
-                              Saving...
-                            </Typography>
-                          </InputAdornment>
-                        ) : undefined,
-                      }}
-                      variant="outlined"
-                      size="small"
-                    />
-                  );
-                })}
+                {childMappings
+                  .map((mapping) => ({
+                    ...mapping,
+                    monthlyAmount: planningData[mapping.categoryId]?.plannedAmount || 0
+                  }))
+                  .sort((a, b) => b.monthlyAmount - a.monthlyAmount) // Sort by amount (high to low)
+                  .map((mapping) => {
+                    const childMonthlyAmount = mapping.monthlyAmount;
+                    const childDisplayAmount = getDisplayAmount(childMonthlyAmount);
+                    const childYearlyAmount = childMonthlyAmount * 12;
+                    const { totalIncome } = calculateTotals();
+                    const percentageOfIncome = totalIncome > 0 ? (childYearlyAmount / totalIncome) * 100 : 0;
+                    
+                    return (
+                      <Box key={mapping.categoryId} sx={{ position: 'relative' }}>
+                        <TextField
+                          fullWidth
+                          label={`${mapping.categoryName} (${viewMode === 'monthly' ? 'M' : viewMode === 'yearly' ? 'Y' : 'W'})`} // Shortened label
+                          type="text"
+                          value={inputValues[mapping.categoryId] !== undefined 
+                            ? inputValues[mapping.categoryId] 
+                            : (childDisplayAmount === 0 ? '' : formatCurrencyInput(childDisplayAmount))
+                          }
+                          onChange={(e) => handleAmountChange(mapping.categoryId, e.target.value)}
+                          onBlur={() => handleAmountBlur(mapping.categoryId)}
+                          onFocus={(e) => handleAmountFocus(mapping.categoryId, e.target.value)}
+                          InputProps={{
+                            startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                            endAdornment: savingStates.has(mapping.categoryId) ? (
+                              <InputAdornment position="end">
+                                <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem' }}>
+                                  Saving...
+                                </Typography>
+                              </InputAdornment>
+                            ) : undefined,
+                          }}
+                          variant="outlined"
+                          size="small"
+                        />
+                        {/* Percentage overlay */}
+                        {childMonthlyAmount > 0 && (
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              position: 'absolute',
+                              top: '6px',
+                              right: '8px',
+                              color: '#888',
+                              fontWeight: 'bold',
+                              fontSize: '0.7rem',
+                              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                              padding: '2px 4px',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            {percentageOfIncome.toFixed(1)}%
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  })}
               </Box>
             </Box>
           </Collapse>
@@ -688,16 +825,24 @@ const Planning = () => {
   const renderStandaloneCategories = (categoriesList: Category[]) => {
     if (categoriesList.length === 0) return null;
     
+    // Sort categories by percentage (high to low)
+    const sortedCategories = categoriesList
+      .map(category => ({
+        ...category,
+        ...getCategoryAmountAndPercentage(category.categoryId, category.type, false)
+      }))
+      .sort((a, b) => b.percentage - a.percentage);
+    
     return (
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 2 }}> {/* Reduced margin */}
         <Typography 
-          variant="h6" 
+          variant="subtitle1" // Smaller typography
           sx={{ 
-            mb: 2, 
+            mb: 1, // Reduced margin
             color: '#666',
             fontWeight: 'bold',
-            borderBottom: '2px solid #e0e0e0',
-            paddingBottom: 1
+            borderBottom: '1px solid #dee2e6', // Thinner border
+            paddingBottom: 0.5 // Reduced padding
           }}
         >
           Other
@@ -705,41 +850,61 @@ const Planning = () => {
         <Box 
           sx={{ 
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: 2,
-            ml: 2
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', // Smaller min width
+            gap: 1.5, // Reduced gap
+            ml: 1 // Reduced margin
           }}
         >
-          {categoriesList.map((category) => {
+          {sortedCategories.map((category) => {
             const categoryMonthlyAmount = planningData[category.categoryId]?.plannedAmount || 0;
             const categoryDisplayAmount = getDisplayAmount(categoryMonthlyAmount);
             
             return (
-              <TextField
-                key={category.categoryId}
-                fullWidth
-                label={`${category.name} (${viewMode === 'monthly' ? 'Monthly' : 'Yearly'})`}
-                type="text"
-                value={inputValues[category.categoryId] !== undefined 
-                  ? inputValues[category.categoryId] 
-                  : (categoryDisplayAmount === 0 ? '' : formatCurrencyInput(categoryDisplayAmount))
-                }
-                onChange={(e) => handleAmountChange(category.categoryId, e.target.value)}
-                onBlur={() => handleAmountBlur(category.categoryId)}
-                onFocus={(e) => handleAmountFocus(category.categoryId, e.target.value)}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                  endAdornment: savingStates.has(category.categoryId) ? (
-                    <InputAdornment position="end">
-                      <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem' }}>
-                        Saving...
-                      </Typography>
-                    </InputAdornment>
-                  ) : undefined,
-                }}
-                variant="outlined"
-                size="small"
-              />
+              <Box key={category.categoryId} sx={{ position: 'relative' }}>
+                <TextField
+                  fullWidth
+                  label={`${category.name} (${viewMode === 'monthly' ? 'M' : viewMode === 'yearly' ? 'Y' : 'W'})`} // Shortened label
+                  type="text"
+                  value={inputValues[category.categoryId] !== undefined 
+                    ? inputValues[category.categoryId] 
+                    : (categoryDisplayAmount === 0 ? '' : formatCurrencyInput(categoryDisplayAmount))
+                  }
+                  onChange={(e) => handleAmountChange(category.categoryId, e.target.value)}
+                  onBlur={() => handleAmountBlur(category.categoryId)}
+                  onFocus={(e) => handleAmountFocus(category.categoryId, e.target.value)}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                    endAdornment: savingStates.has(category.categoryId) ? (
+                      <InputAdornment position="end">
+                        <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem' }}>
+                          Saving...
+                        </Typography>
+                      </InputAdornment>
+                    ) : undefined,
+                  }}
+                  variant="outlined"
+                  size="small"
+                />
+                {/* Percentage overlay */}
+                {categoryMonthlyAmount > 0 && (
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      position: 'absolute',
+                      top: '6px',
+                      right: '8px',
+                      color: '#888',
+                      fontWeight: 'bold',
+                      fontSize: '0.7rem',
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                      padding: '2px 4px',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    {category.percentage.toFixed(1)}%
+                  </Typography>
+                )}
+              </Box>
             );
           })}
         </Box>
@@ -753,20 +918,30 @@ const Planning = () => {
       cat.type === type && 
       cat.name.toLowerCase() !== 'unassigned'
     );
+    
+    // Sort parent categories by percentage (high to low)
+    const sortedParentCats = parentCats
+      .map(parent => ({
+        ...parent,
+        ...getCategoryAmountAndPercentage(parent.categoryId, parent.type, true)
+      }))
+      .sort((a, b) => b.percentage - a.percentage);
+    
     const standaloneCats = getStandaloneCategories(type);
     
     return (
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: 2 }}> {/* Reduced margin */}
         <CardHeader 
           title={title}
           sx={{ 
             backgroundColor: cardColor,
             color: 'white',
-            '& .MuiCardHeader-title': { fontSize: '1.25rem', fontWeight: 'bold' }
+            py: 1.5, // Reduced padding
+            '& .MuiCardHeader-title': { fontSize: '1.1rem', fontWeight: 'bold' } // Smaller font
           }}
         />
-        <CardContent>
-          {parentCats.map(parent => renderParentCategorySection(parent))}
+        <CardContent sx={{ py: 1.5 }}> {/* Reduced padding */}
+          {sortedParentCats.map(parent => renderParentCategorySection(parent))}
           {renderStandaloneCategories(standaloneCats)}
         </CardContent>
       </Card>
@@ -791,21 +966,23 @@ const Planning = () => {
             <Typography variant="h4" gutterBottom>
               Financial Planning
             </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Plan your income and expenses for {currentYear}. Enter {viewMode} amounts and view annual projections.
-            </Typography>
           </Box>
           
           {/* View Mode Toggle */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-              Input Mode:
-            </Typography>
+            <Button
+              variant={viewMode === 'weekly' ? 'contained' : 'outlined'}
+              size="small"
+              onClick={() => setViewMode('weekly')}
+              sx={{ minWidth: 70 }}
+            >
+              Weekly
+            </Button>
             <Button
               variant={viewMode === 'monthly' ? 'contained' : 'outlined'}
               size="small"
               onClick={() => setViewMode('monthly')}
-              sx={{ minWidth: 80 }}
+              sx={{ minWidth: 70 }}
             >
               Monthly
             </Button>
@@ -813,7 +990,7 @@ const Planning = () => {
               variant={viewMode === 'yearly' ? 'contained' : 'outlined'}
               size="small"
               onClick={() => setViewMode('yearly')}
-              sx={{ minWidth: 80 }}
+              sx={{ minWidth: 70 }}
             >
               Yearly
             </Button>
@@ -821,9 +998,94 @@ const Planning = () => {
         </Box>
       </Box>
 
+      {/* Summary Card */}
+      <Card 
+        sx={{ 
+          mb: 2, 
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: 3
+          }
+        }}
+        onClick={() => setShowPieChart(true)}
+      >
+        <CardHeader 
+          title={`${currentYear} Annual Budget Summary`}
+          action={
+            <IconButton size="small" sx={{ color: 'white' }}>
+              <PieChartIcon />
+            </IconButton>
+          }
+          sx={{ 
+            backgroundColor: '#2196F3',
+            color: 'white',
+            py: 1.5, // Reduced padding
+            '& .MuiCardHeader-title': { fontSize: '1.1rem', fontWeight: 'bold' }
+          }}
+        />
+        <CardContent sx={{ py: 2 }}> {/* Reduced padding */}
+          <Box 
+            sx={{ 
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', // Smaller min width
+              gap: 2, // Reduced gap
+              mb: 2 // Reduced margin
+            }}
+          >
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                Total Income: <span style={{ color: '#4CAF50' }}>${totalIncome.toLocaleString()}</span>
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                Total Expenses: <span style={{ color: '#F44336' }}>${totalExpenses.toLocaleString()}</span>
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                Net Amount: <span style={{ color: netAmount >= 0 ? '#4CAF50' : '#F44336' }}>${netAmount.toLocaleString()}</span>
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                Allocation: <span style={{ 
+                  color: budgetAllocationPercentage > 100 ? '#F44336' : 
+                         budgetAllocationPercentage > 90 ? '#FF9800' : 
+                         'text.primary'
+                }}>{budgetAllocationPercentage.toFixed(1)}%</span>
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Compact Budget Allocation Progress */}
+          {totalIncome > 0 && (
+            <Box sx={{ mb: 1 }}>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(budgetAllocationPercentage, 100)}
+                sx={{
+                  height: 8, // Smaller height
+                  borderRadius: 4,
+                  backgroundColor: '#e0e0e0',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 4,
+                    backgroundColor: budgetAllocationPercentage > 100 ? '#F44336' : 
+                                   budgetAllocationPercentage > 90 ? '#FF9800' : 
+                                   '#4CAF50'
+                  }
+                }}
+              />
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Income Categories */}
       {incomeParents.length > 0 || getStandaloneCategories('Income').length > 0 ? 
-        renderOrganizedCategories('Income', 'Income Categories', '#4caf50') :
+        renderOrganizedCategories('Income', 'Income Categories', '#616161') :
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           No income categories found. Please add some categories first.
         </Typography>
@@ -831,123 +1093,11 @@ const Planning = () => {
 
       {/* Expense Categories */}
       {expenseParents.length > 0 || getStandaloneCategories('Expense').length > 0 ? 
-        renderOrganizedCategories('Expense', 'Expense Categories', '#f44336') :
+        renderOrganizedCategories('Expense', 'Expense Categories', '#616161') :
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           No expense categories found. Please add some categories first.
         </Typography>
       }
-
-      {/* Summary Card */}
-      <Card sx={{ mb: 3 }}>
-        <CardHeader 
-          title={`${currentYear} Annual Budget Summary`}
-          sx={{ 
-            backgroundColor: '#2196f3',
-            color: 'white',
-            '& .MuiCardHeader-title': { fontSize: '1.25rem', fontWeight: 'bold' },
-            '& .MuiCardHeader-subheader': { color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.875rem' }
-          }}
-        />
-        <CardContent>
-          <Box 
-            sx={{ 
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: 3,
-              mb: 3
-            }}
-          >
-            <Box>
-              <Typography variant="h6" color="success.main">
-                Total Income: ${totalIncome.toLocaleString()}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="h6" color="error.main">
-                Total Expenses: ${totalExpenses.toLocaleString()}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography 
-                variant="h6" 
-                color={netAmount >= 0 ? 'success.main' : 'error.main'}
-                sx={{ fontWeight: 'bold' }}
-              >
-                Net Amount: ${netAmount.toLocaleString()}
-              </Typography>
-            </Box>
-          </Box>
-
-          {/* Budget Allocation Progress */}
-          {totalIncome > 0 && (
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Budget Allocation
-                </Typography>
-                <Typography 
-                  variant="h6" 
-                  sx={{ 
-                    fontWeight: 'bold',
-                    color: budgetAllocationPercentage > 100 ? 'error.main' : 
-                           budgetAllocationPercentage > 90 ? 'warning.main' : 
-                           'success.main'
-                  }}
-                >
-                  {budgetAllocationPercentage.toFixed(1)}%
-                </Typography>
-              </Box>
-              
-              <LinearProgress
-                variant="determinate"
-                value={Math.min(budgetAllocationPercentage, 100)}
-                sx={{
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: '#e0e0e0',
-                  '& .MuiLinearProgress-bar': {
-                    borderRadius: 6,
-                    backgroundColor: budgetAllocationPercentage > 100 ? '#f44336' : 
-                                   budgetAllocationPercentage > 90 ? '#ff9800' : 
-                                   '#4caf50'
-                  }
-                }}
-              />
-              
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  $0
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  ${totalIncome.toLocaleString()}
-                </Typography>
-              </Box>
-              
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-                {budgetAllocationPercentage > 100 ? 
-                  `Over budget by $${(totalExpenses - totalIncome).toLocaleString()}` :
-                  budgetAllocationPercentage > 90 ?
-                  `Almost fully allocated - $${(totalIncome - totalExpenses).toLocaleString()} remaining` :
-                  `$${(totalIncome - totalExpenses).toLocaleString()} available for additional expenses or savings`
-                }
-              </Typography>
-            </Box>
-          )}
-          
-          {netAmount < 0 && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Your planned expenses exceed your planned income by ${Math.abs(netAmount).toLocaleString()}. 
-              Consider adjusting your budget.
-            </Alert>
-          )}
-          
-          {netAmount > 0 && (
-            <Alert severity="success" sx={{ mt: 2 }}>
-              Great! You have a surplus of ${netAmount.toLocaleString()} in your planned budget.
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Action Buttons */}
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
@@ -981,6 +1131,43 @@ const Planning = () => {
           {error}
         </Alert>
       </Snackbar>
+
+      {/* Pie Chart Modal */}
+      <Dialog
+        open={showPieChart}
+        onClose={() => setShowPieChart(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ textAlign: 'center', fontWeight: 'bold' }}>
+          Expense Breakdown by Category
+        </DialogTitle>
+        <DialogContent>
+          {getPieChartData().length > 0 ? (
+            <Box sx={{ height: 600, width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <D3PieChart 
+                data={getPieChartData()} 
+                width={600} 
+                height={600} 
+              />
+            </Box>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="h6" color="text.secondary">
+                No expense data to display
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Enter some expense amounts to see the breakdown
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowPieChart(false)} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

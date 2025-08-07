@@ -87,7 +87,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
           .style("border-radius", "4px")
           .style("font-size", "12px")
           .style("pointer-events", "none")
-          .style("z-index", 1000);
+          .style("z-index", 9999); // Very high z-index to appear above dialogs
 
         tooltip.html(`
           <div><strong>${d.data.categoryName}</strong></div>
