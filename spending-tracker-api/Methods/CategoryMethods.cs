@@ -98,28 +98,41 @@ public class CategoryMethods
     {
         try
         {
-            // Check if category already exists
-            var existingCategory = await _context.Categories
-                .FirstOrDefaultAsync(c => c.Name == request.CategoryName && c.Type == request.Type);
+            // Check if a child category with this name already exists under the same parent
+            var existingChildCategory = await _context.Categories
+                .FirstOrDefaultAsync(c => c.Name == request.CategoryName &&
+                                        c.Type == request.Type &&
+                                        c.ParentCategoryId == request.ParentCategoryId);
 
-            if (existingCategory != null)
+            if (existingChildCategory != null)
             {
-                // Update existing category to have the new parent
-                existingCategory.ParentCategoryId = request.ParentCategoryId;
+                throw new Exception("A child category with this name already exists under this parent category");
+            }
+
+            // Check if category already exists as a standalone category (no parent)
+            var existingStandaloneCategory = await _context.Categories
+                .FirstOrDefaultAsync(c => c.Name == request.CategoryName &&
+                                        c.Type == request.Type &&
+                                        c.ParentCategoryId == null);
+
+            if (existingStandaloneCategory != null)
+            {
+                // Update existing standalone category to have the new parent
+                existingStandaloneCategory.ParentCategoryId = request.ParentCategoryId;
                 await _context.SaveChangesAsync();
 
                 var parentCategory = await _context.Categories.FindAsync(request.ParentCategoryId);
                 return new CategoryMappingDto
                 {
-                    CategoryId = existingCategory.CategoryId,
-                    CategoryName = existingCategory.Name,
+                    CategoryId = existingStandaloneCategory.CategoryId,
+                    CategoryName = existingStandaloneCategory.Name,
                     ParentCategoryId = request.ParentCategoryId,
                     ParentCategoryName = parentCategory?.Name ?? ""
                 };
             }
             else
             {
-                // Create new category
+                // Create new child category
                 var newCategory = new Category
                 {
                     Name = request.CategoryName,
@@ -154,6 +167,18 @@ public class CategoryMethods
             if (category == null)
             {
                 throw new Exception("Category not found");
+            }
+
+            // Check if a child category with this name already exists under the same parent (excluding current category)
+            var existingChildCategory = await _context.Categories
+                .FirstOrDefaultAsync(c => c.Name == request.CategoryName &&
+                                        c.Type == category.Type &&
+                                        c.ParentCategoryId == request.ParentCategoryId &&
+                                        c.CategoryId != categoryId);
+
+            if (existingChildCategory != null)
+            {
+                throw new Exception("A child category with this name already exists under this parent category");
             }
 
             category.Name = request.CategoryName;
@@ -208,10 +233,11 @@ public class CategoryMethods
     {
         try
         {
-            var existingCategory = await _context.Categories
+            // Check if a parent category with this name already exists
+            var existingParentCategory = await _context.Categories
                 .FirstOrDefaultAsync(c => c.Name == request.Name && c.Type == request.Type && c.ParentCategoryId == null);
 
-            if (existingCategory != null)
+            if (existingParentCategory != null)
             {
                 throw new Exception("A parent category with this name already exists");
             }
@@ -256,11 +282,11 @@ public class CategoryMethods
                 throw new Exception("This is not a parent category");
             }
 
-            // Check if another parent category with this name exists
-            var existingCategory = await _context.Categories
+            // Check if another parent category with this name exists (excluding current category)
+            var existingParentCategory = await _context.Categories
                 .FirstOrDefaultAsync(c => c.Name == request.Name && c.Type == request.Type && c.ParentCategoryId == null && c.CategoryId != categoryId);
 
-            if (existingCategory != null)
+            if (existingParentCategory != null)
             {
                 throw new Exception("A parent category with this name already exists");
             }

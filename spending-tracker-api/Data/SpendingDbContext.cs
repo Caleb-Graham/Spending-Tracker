@@ -52,8 +52,18 @@ public class SpendingDbContext : DbContext
                 .HasForeignKey(c => c.ParentCategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Create a unique constraint on Name and Type combination
-            entity.HasIndex(c => new { c.Name, c.Type }).IsUnique();
+            // Create separate unique constraints for parent and child categories
+            // Parent categories: unique by Name and Type where ParentCategoryId is null
+            entity.HasIndex(c => new { c.Name, c.Type, c.ParentCategoryId })
+                .IsUnique()
+                .HasDatabaseName("IX_Categories_Name_Type_ParentCategoryId_Parents")
+                .HasFilter("ParentCategoryId IS NULL");
+
+            // Child categories: unique by Name, Type, and ParentCategoryId where ParentCategoryId is not null
+            entity.HasIndex(c => new { c.Name, c.Type, c.ParentCategoryId })
+                .IsUnique()
+                .HasDatabaseName("IX_Categories_Name_Type_ParentCategoryId_Children")
+                .HasFilter("ParentCategoryId IS NOT NULL");
         });
 
         // Configure Account
