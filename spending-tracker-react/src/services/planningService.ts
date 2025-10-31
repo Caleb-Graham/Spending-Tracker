@@ -3,6 +3,7 @@ import { API_BASE_URL } from "./apiConfig";
 export interface PlanningBudget {
   planningBudgetId: number;
   categoryId: number;
+  scenarioId: number;
   year: number;
   plannedAmount: number;
   createdAt: string;
@@ -12,18 +13,29 @@ export interface PlanningBudget {
     name: string;
     type: string;
   };
+  scenario: {
+    scenarioId: number;
+    name: string;
+    description?: string;
+  };
 }
 
 export interface SavePlanningBudgetRequest {
   categoryId: number;
+  scenarioId: number;
   year: number;
   plannedAmount: number;
 }
 
 export const planningService = {
-  // Get all planning budgets for a specific year
-  getPlanningBudgets: async (year: number): Promise<PlanningBudget[]> => {
-    const response = await fetch(`${API_BASE_URL}/planning/${year}`);
+  // Get all planning budgets for a specific scenario and year
+  getPlanningBudgets: async (
+    scenarioId: number,
+    year: number
+  ): Promise<PlanningBudget[]> => {
+    const response = await fetch(
+      `${API_BASE_URL}/planning/${scenarioId}/${year}`
+    );
 
     if (!response.ok) {
       const error = await response.json();
@@ -33,13 +45,14 @@ export const planningService = {
     return response.json();
   },
 
-  // Get planning budget for a specific category and year
+  // Get planning budget for a specific category, scenario and year
   getPlanningBudget: async (
     categoryId: number,
+    scenarioId: number,
     year: number
   ): Promise<PlanningBudget | null> => {
     const response = await fetch(
-      `${API_BASE_URL}/planning/${categoryId}/${year}`
+      `${API_BASE_URL}/planning/${categoryId}/${scenarioId}/${year}`
     );
 
     if (response.status === 404) {
@@ -77,10 +90,11 @@ export const planningService = {
   // Delete planning budget
   deletePlanningBudget: async (
     categoryId: number,
+    scenarioId: number,
     year: number
   ): Promise<void> => {
     const response = await fetch(
-      `${API_BASE_URL}/planning/${categoryId}/${year}`,
+      `${API_BASE_URL}/planning/${categoryId}/${scenarioId}/${year}`,
       {
         method: "DELETE",
       }

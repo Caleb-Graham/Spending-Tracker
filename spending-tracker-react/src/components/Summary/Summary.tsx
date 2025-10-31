@@ -160,8 +160,22 @@ const Summary = () => {
     }
   };
 
+  // Combined effect for data loading and localStorage persistence
   useEffect(() => {
-    // Use custom dates if both are set, otherwise use the selected date range
+    // Save dates to localStorage
+    if (startDate) {
+      localStorage.setItem('summary-start-date', startDate.toISOString());
+    } else {
+      localStorage.removeItem('summary-start-date');
+    }
+    
+    if (endDate) {
+      localStorage.setItem('summary-end-date', endDate.toISOString());
+    } else {
+      localStorage.removeItem('summary-end-date');
+    }
+
+    // Load data based on current date selection
     const loadData = async () => {
       if (startDate && endDate) {
         loadCategorySummary(startDate, endDate);
@@ -173,23 +187,6 @@ const Summary = () => {
     
     loadData();
   }, [dateRange, startDate, endDate]);
-
-  // Save custom dates to localStorage whenever they change
-  useEffect(() => {
-    if (startDate) {
-      localStorage.setItem('summary-start-date', startDate.toISOString());
-    } else {
-      localStorage.removeItem('summary-start-date');
-    }
-  }, [startDate]);
-
-  useEffect(() => {
-    if (endDate) {
-      localStorage.setItem('summary-end-date', endDate.toISOString());
-    } else {
-      localStorage.removeItem('summary-end-date');
-    }
-  }, [endDate]);
 
   const handleDateRangeChange = async (event: any) => {
     const value = event.target.value;

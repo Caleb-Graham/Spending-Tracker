@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SpendingTrackerApi.Data;
 
@@ -10,9 +11,11 @@ using SpendingTrackerApi.Data;
 namespace spending_tracker_api.Migrations
 {
     [DbContext(typeof(SpendingDbContext))]
-    partial class SpendingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250811195511_AddScenarios")]
+    partial class AddScenarios
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
@@ -155,6 +158,9 @@ namespace spending_tracker_api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -175,8 +181,9 @@ namespace spending_tracker_api.Migrations
                         {
                             ScenarioId = 1,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Initial planning scenario",
-                            Name = "Base Scenario",
+                            Description = "Default planning scenario",
+                            IsDefault = true,
+                            Name = "Default",
                             UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });

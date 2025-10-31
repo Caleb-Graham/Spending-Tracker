@@ -6,10 +6,10 @@ namespace SpendingTrackerApi.Services;
 
 public interface IPlanningService
 {
-    Task<IEnumerable<PlanningBudget>> GetPlanningBudgetsAsync(int year);
-    Task<PlanningBudget?> GetPlanningBudgetAsync(int categoryId, int year);
-    Task<PlanningBudget> SavePlanningBudgetAsync(int categoryId, int year, decimal plannedAmount);
-    Task DeletePlanningBudgetAsync(int categoryId, int year);
+    Task<IEnumerable<PlanningBudget>> GetPlanningBudgetsAsync(int scenarioId, int year);
+    Task<PlanningBudget?> GetPlanningBudgetAsync(int categoryId, int scenarioId, int year);
+    Task<PlanningBudget> SavePlanningBudgetAsync(int categoryId, int scenarioId, int year, decimal plannedAmount);
+    Task DeletePlanningBudgetAsync(int categoryId, int scenarioId, int year);
 }
 
 public class PlanningService : IPlanningService
@@ -21,25 +21,27 @@ public class PlanningService : IPlanningService
         _context = context;
     }
 
-    public async Task<IEnumerable<PlanningBudget>> GetPlanningBudgetsAsync(int year)
+    public async Task<IEnumerable<PlanningBudget>> GetPlanningBudgetsAsync(int scenarioId, int year)
     {
         return await _context.PlanningBudgets
             .Include(p => p.Category)
-            .Where(p => p.Year == year)
+            .Include(p => p.Scenario)
+            .Where(p => p.ScenarioId == scenarioId && p.Year == year)
             .ToListAsync();
     }
 
-    public async Task<PlanningBudget?> GetPlanningBudgetAsync(int categoryId, int year)
+    public async Task<PlanningBudget?> GetPlanningBudgetAsync(int categoryId, int scenarioId, int year)
     {
         return await _context.PlanningBudgets
             .Include(p => p.Category)
-            .FirstOrDefaultAsync(p => p.CategoryId == categoryId && p.Year == year);
+            .Include(p => p.Scenario)
+            .FirstOrDefaultAsync(p => p.CategoryId == categoryId && p.ScenarioId == scenarioId && p.Year == year);
     }
 
-    public async Task<PlanningBudget> SavePlanningBudgetAsync(int categoryId, int year, decimal plannedAmount)
+    public async Task<PlanningBudget> SavePlanningBudgetAsync(int categoryId, int scenarioId, int year, decimal plannedAmount)
     {
         var existingBudget = await _context.PlanningBudgets
-            .FirstOrDefaultAsync(p => p.CategoryId == categoryId && p.Year == year);
+            .FirstOrDefaultAsync(p => p.CategoryId == categoryId && p.ScenarioId == scenarioId && p.Year == year);
 
         if (existingBudget != null)
         {
@@ -51,6 +53,7 @@ public class PlanningService : IPlanningService
             existingBudget = new PlanningBudget
             {
                 CategoryId = categoryId,
+                ScenarioId = scenarioId,
                 Year = year,
                 PlannedAmount = plannedAmount,
                 CreatedAt = DateTime.UtcNow,
@@ -61,16 +64,17 @@ public class PlanningService : IPlanningService
 
         await _context.SaveChangesAsync();
 
-        // Return the budget with category included
+        // Return the budget with category and scenario included
         return await _context.PlanningBudgets
             .Include(p => p.Category)
+            .Include(p => p.Scenario)
             .FirstAsync(p => p.PlanningBudgetId == existingBudget.PlanningBudgetId);
     }
 
-    public async Task DeletePlanningBudgetAsync(int categoryId, int year)
+    public async Task DeletePlanningBudgetAsync(int categoryId, int scenarioId, int year)
     {
         var budget = await _context.PlanningBudgets
-            .FirstOrDefaultAsync(p => p.CategoryId == categoryId && p.Year == year);
+            .FirstOrDefaultAsync(p => p.CategoryId == categoryId && p.ScenarioId == scenarioId && p.Year == year);
 
         if (budget != null)
         {

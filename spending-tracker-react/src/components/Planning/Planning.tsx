@@ -23,17 +23,20 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Chip
 } from '@mui/material';
 import {
   Save as SaveIcon,
   Calculate as CalculateIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
-import { getAllCategories, getParentCategories, getCategoryMappings, planningService, type Category, type CategoryMapping, type PlanningBudget } from '../../services';
+import { getAllCategories, getParentCategories, getCategoryMappings, planningService, scenarioService, type Category, type CategoryMapping, type PlanningBudget, type Scenario } from '../../services';
 import D3PieChart from '../D3PieChart/D3PieChart';
+import ScenarioManager from '../ScenarioManager/ScenarioManager';
 import './Planning.css';
 
 interface PlanningData {
@@ -66,6 +69,11 @@ const Planning = () => {
   const [viewMode, setViewMode] = useState<'monthly' | 'yearly' | 'weekly'>('monthly');
   const [inputValues, setInputValues] = useState<Record<number, string>>({});
   const [showPieChart, setShowPieChart] = useState(false);
+  
+  // Scenario state
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
+  const [showScenarioManager, setShowScenarioManager] = useState(false);
 
   const currentYear = new Date().getFullYear();
 
@@ -179,7 +187,7 @@ const Planning = () => {
   );
 
   useEffect(() => {
-    loadCategoriesData();
+    loadInitialData();
   }, []);
 
   // Clear input cache when view mode changes to force recalculation of display values
@@ -187,23 +195,62 @@ const Planning = () => {
     setInputValues({});
   }, [viewMode]);
 
-  const loadCategoriesData = async () => {
+  // Reload planning data when scenario changes
+  useEffect(() => {
+    if (currentScenario) {
+      loadPlanningData();
+    }
+  }, [currentScenario]);
+
+  const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [fetchedCategories, fetchedParents, fetchedMappings, planningBudgets] = await Promise.all([
+      const [fetchedCategories, fetchedParents, fetchedMappings, fetchedScenarios] = await Promise.all([
         getAllCategories(),
         getParentCategories(),
         getCategoryMappings(),
-        planningService.getPlanningBudgets(currentYear)
+        scenarioService.getScenarios()
       ]);
       
       setCategories(fetchedCategories);
       setParentCategories(fetchedParents);
       setCategoryMappings(fetchedMappings);
+      setScenarios(fetchedScenarios);
+      
+      // Get last selected scenario from localStorage or default to first scenario
+      const lastSelectedScenarioId = localStorage.getItem('selectedScenarioId');
+      let targetScenario = null;
+      
+      if (lastSelectedScenarioId && fetchedScenarios.length > 0) {
+        targetScenario = fetchedScenarios.find(s => s.scenarioId === parseInt(lastSelectedScenarioId));
+      }
+      
+      // Fallback to first scenario if no saved scenario or scenario not found
+      if (!targetScenario && fetchedScenarios.length > 0) {
+        targetScenario = fetchedScenarios[0];
+      }
+      
+      if (targetScenario) {
+        setCurrentScenario(targetScenario);
+        localStorage.setItem('selectedScenarioId', targetScenario.scenarioId.toString());
+      }
+    } catch (err) {
+      setError('Failed to load initial data');
+      console.error('Error loading initial data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPlanningData = async () => {
+    if (!currentScenario) return;
+    
+    try {
+      const planningBudgets = await planningService.getPlanningBudgets(currentScenario.scenarioId, currentYear);
       
       // Initialize planning data with saved values or empty values
       const initialData: PlanningData = {};
-      fetchedCategories.forEach(category => {
+      categories.forEach(category => {
         const savedBudget = planningBudgets.find(b => b.categoryId === category.categoryId);
         // Store as monthly amounts (divide yearly by 12 if saved data exists)
         const monthlyAmount = savedBudget ? savedBudget.plannedAmount / 12 : 0;
@@ -217,7 +264,7 @@ const Planning = () => {
       
       // Initialize parent planning data with saved values
       const initialParentData: ParentPlanningData = {};
-      fetchedParents.forEach(parent => {
+      parentCategories.forEach(parent => {
         const savedBudget = planningBudgets.find(b => b.categoryId === parent.categoryId);
         // Store as monthly amounts (divide yearly by 12 if saved data exists)
         const monthlyAmount = savedBudget ? savedBudget.plannedAmount / 12 : 0;
@@ -229,15 +276,21 @@ const Planning = () => {
       });
       setParentPlanningData(initialParentData);
     } catch (err) {
-      setError('Failed to load categories and planning data');
-      console.error('Error loading data:', err);
-    } finally {
-      setLoading(false);
+      setError('Failed to load planning data');
+      console.error('Error loading planning data:', err);
     }
   };
 
+  const loadCategoriesData = async () => {
+    // This function is now replaced by loadInitialData and loadPlanningData
+    // Keeping for backwards compatibility but redirecting to new functions
+    await loadInitialData();
+  };
+
   // Auto-save function with debounce
-  const autoSave = async (categoryId: number, monthlyAmount: number) => {
+  const autoSave = React.useCallback(async (categoryId: number, monthlyAmount: number) => {
+    if (!currentScenario) return;
+    
     try {
       setSavingStates(prev => new Set(prev).add(categoryId));
       
@@ -247,12 +300,13 @@ const Planning = () => {
       if (yearlyAmount > 0) {
         await planningService.savePlanningBudget({
           categoryId,
+          scenarioId: currentScenario.scenarioId,
           year: currentYear,
           plannedAmount: yearlyAmount
         });
       } else {
         // Delete if amount is 0
-        await planningService.deletePlanningBudget(categoryId, currentYear);
+        await planningService.deletePlanningBudget(categoryId, currentScenario.scenarioId, currentYear);
       }
     } catch (err) {
       console.error('Error auto-saving:', err);
@@ -264,7 +318,7 @@ const Planning = () => {
         return newSet;
       });
     }
-  };
+  }, [currentScenario, currentYear]);
 
   // Debounced auto-save
   const debouncedAutoSave = React.useCallback(
@@ -286,8 +340,8 @@ const Planning = () => {
         
         timeouts.set(categoryId, newTimeout);
       };
-    }, [currentYear]),
-    [currentYear]
+    }, [currentYear, currentScenario]),
+    [currentYear, currentScenario, autoSave]
   );
 
   const handleAmountChange = (categoryId: number, value: string) => {
@@ -484,6 +538,8 @@ const Planning = () => {
   };
 
   const handleClearAll = async () => {
+    if (!currentScenario) return;
+    
     try {
       setLoading(true);
       
@@ -495,7 +551,7 @@ const Planning = () => {
       
       await Promise.all(
         allCategoryIds.map(categoryId => 
-          planningService.deletePlanningBudget(categoryId, currentYear)
+          planningService.deletePlanningBudget(categoryId, currentScenario.scenarioId, currentYear)
         )
       );
       
@@ -526,6 +582,41 @@ const Planning = () => {
       console.error('Error clearing data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Scenario management functions
+  const handleScenarioChange = (scenario: Scenario) => {
+    setCurrentScenario(scenario);
+    localStorage.setItem('selectedScenarioId', scenario.scenarioId.toString());
+    setShowScenarioManager(false);
+  };
+
+  const handleScenariosUpdated = async () => {
+    try {
+      const updatedScenarios = await scenarioService.getScenarios();
+      setScenarios(updatedScenarios);
+      
+      // Update current scenario if it was modified
+      if (currentScenario) {
+        const updatedCurrentScenario = updatedScenarios.find(s => s.scenarioId === currentScenario.scenarioId);
+        if (updatedCurrentScenario) {
+          setCurrentScenario(updatedCurrentScenario);
+        } else {
+          // Current scenario was deleted, switch to first available scenario
+          const firstScenario = updatedScenarios[0];
+          if (firstScenario) {
+            setCurrentScenario(firstScenario);
+            localStorage.setItem('selectedScenarioId', firstScenario.scenarioId.toString());
+          } else {
+            setCurrentScenario(null);
+            localStorage.removeItem('selectedScenarioId');
+          }
+        }
+      }
+    } catch (err) {
+      setError('Failed to refresh scenarios');
+      console.error('Error refreshing scenarios:', err);
     }
   };
 
@@ -966,6 +1057,54 @@ const Planning = () => {
             <Typography variant="h4" gutterBottom>
               Financial Planning
             </Typography>
+            {/* Scenario Selector */}
+            {scenarios.length > 0 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Scenario:
+                </Typography>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <Select
+                    value={currentScenario?.scenarioId || ''}
+                    onChange={(e) => {
+                      const selectedScenario = scenarios.find(s => s.scenarioId === e.target.value);
+                      if (selectedScenario) {
+                        handleScenarioChange(selectedScenario);
+                      }
+                    }}
+                    displayEmpty
+                    renderValue={(selected) => {
+                      if (!selected) return 'Select scenario...';
+                      const scenario = scenarios.find(s => s.scenarioId === selected);
+                      return scenario?.name || 'Select scenario...';
+                    }}
+                  >
+                    {scenarios.map((scenario) => (
+                      <MenuItem key={scenario.scenarioId} value={scenario.scenarioId}>
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {scenario.name}
+                          </Typography>
+                          {scenario.description && (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {scenario.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<SettingsIcon />}
+                  onClick={() => setShowScenarioManager(true)}
+                >
+                  Manage
+                </Button>
+              </Box>
+            )}
           </Box>
           
           {/* View Mode Toggle */}
@@ -1168,6 +1307,16 @@ const Planning = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Scenario Manager */}
+      <ScenarioManager
+        open={showScenarioManager}
+        onClose={() => setShowScenarioManager(false)}
+        scenarios={scenarios}
+        currentScenarioId={currentScenario?.scenarioId || 0}
+        onScenarioChange={handleScenarioChange}
+        onScenariosUpdated={handleScenariosUpdated}
+      />
     </div>
   );
 };

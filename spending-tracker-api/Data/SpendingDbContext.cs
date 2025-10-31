@@ -15,6 +15,7 @@ public class SpendingDbContext : DbContext
     public DbSet<Account> Accounts { get; set; }
     public DbSet<NetWorth> NetWorth { get; set; }
     public DbSet<PlanningBudget> PlanningBudgets { get; set; }
+    public DbSet<Scenario> Scenarios { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -98,13 +99,43 @@ public class SpendingDbContext : DbContext
                 .HasForeignKey(p => p.CategoryId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Create unique constraint on CategoryId and Year combination
-            entity.HasIndex(p => new { p.CategoryId, p.Year }).IsUnique();
+            entity.HasOne(p => p.Scenario)
+                .WithMany(s => s.PlanningBudgets)
+                .HasForeignKey(p => p.ScenarioId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Create unique constraint on CategoryId, ScenarioId, and Year combination
+            entity.HasIndex(p => new { p.CategoryId, p.ScenarioId, p.Year }).IsUnique();
         });
 
-        // Seed initial account only
+        // Configure Scenario
+        modelBuilder.Entity<Scenario>(entity =>
+        {
+            entity.HasKey(e => e.ScenarioId);
+            entity.Property(s => s.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+            entity.Property(s => s.Description)
+                .HasMaxLength(500);
+
+            // Ensure scenario names are unique
+            entity.HasIndex(s => s.Name).IsUnique();
+        });
+
+        // Seed initial account and default scenario only
         modelBuilder.Entity<Account>().HasData(
             new Account { AccountId = 1, Name = "Caleb Expenses" }
+        );
+
+        modelBuilder.Entity<Scenario>().HasData(
+            new Scenario
+            {
+                ScenarioId = 1,
+                Name = "Base Scenario",
+                Description = "Initial planning scenario",
+                CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
         );
     }
 }

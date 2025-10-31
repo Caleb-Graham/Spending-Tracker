@@ -38,6 +38,7 @@ builder.Services.AddScoped<TransactionMethods>();
 builder.Services.AddScoped<CategoryMethods>();
 builder.Services.AddScoped<NetWorthMethods>();
 builder.Services.AddScoped<SpendingTrackerApi.Services.IPlanningService, SpendingTrackerApi.Services.PlanningService>();
+builder.Services.AddScoped<SpendingTrackerApi.Services.IScenarioService, SpendingTrackerApi.Services.ScenarioService>();
 
 var app = builder.Build();
 
@@ -61,5 +62,6 @@ app.MapTransactionFunctions();
 app.MapCategoryFunctions();
 app.MapNetWorthFunctions();
 SpendingTrackerApi.Endpoints.PlanningEndpoints.MapPlanningEndpoints(app);
+SpendingTrackerApi.Endpoints.ScenarioEndpoints.MapScenarioEndpoints(app);
 
 app.Run();

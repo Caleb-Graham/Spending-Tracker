@@ -10,23 +10,23 @@ public static class PlanningEndpoints
         var planningGroup = app.MapGroup("/api/planning")
             .WithTags("Planning");
 
-        // GET /api/planning/{year} - Get all planning budgets for a year
-        planningGroup.MapGet("/{year:int}", async (int year, IPlanningService planningService) =>
+        // GET /api/planning/{scenarioId}/{year} - Get all planning budgets for a scenario and year
+        planningGroup.MapGet("/{scenarioId:int}/{year:int}", async (int scenarioId, int year, IPlanningService planningService) =>
         {
-            var budgets = await planningService.GetPlanningBudgetsAsync(year);
+            var budgets = await planningService.GetPlanningBudgetsAsync(scenarioId, year);
             return Results.Ok(budgets);
         })
         .WithName("GetPlanningBudgets")
-        .WithSummary("Get all planning budgets for a specific year");
+        .WithSummary("Get all planning budgets for a specific scenario and year");
 
-        // GET /api/planning/{categoryId}/{year} - Get planning budget for a specific category and year
-        planningGroup.MapGet("/{categoryId:int}/{year:int}", async (int categoryId, int year, IPlanningService planningService) =>
+        // GET /api/planning/{categoryId}/{scenarioId}/{year} - Get planning budget for a specific category, scenario and year
+        planningGroup.MapGet("/{categoryId:int}/{scenarioId:int}/{year:int}", async (int categoryId, int scenarioId, int year, IPlanningService planningService) =>
         {
-            var budget = await planningService.GetPlanningBudgetAsync(categoryId, year);
+            var budget = await planningService.GetPlanningBudgetAsync(categoryId, scenarioId, year);
             return budget != null ? Results.Ok(budget) : Results.NotFound();
         })
         .WithName("GetPlanningBudget")
-        .WithSummary("Get planning budget for a specific category and year");
+        .WithSummary("Get planning budget for a specific category, scenario and year");
 
         // POST /api/planning - Save or update planning budget
         planningGroup.MapPost("/", async (SavePlanningBudgetRequest request, IPlanningService planningService) =>
@@ -35,6 +35,7 @@ public static class PlanningEndpoints
             {
                 var budget = await planningService.SavePlanningBudgetAsync(
                     request.CategoryId,
+                    request.ScenarioId,
                     request.Year,
                     request.PlannedAmount);
 
@@ -48,10 +49,10 @@ public static class PlanningEndpoints
         .WithName("SavePlanningBudget")
         .WithSummary("Save or update a planning budget");
 
-        // DELETE /api/planning/{categoryId}/{year} - Delete planning budget
-        planningGroup.MapDelete("/{categoryId:int}/{year:int}", async (int categoryId, int year, IPlanningService planningService) =>
+        // DELETE /api/planning/{categoryId}/{scenarioId}/{year} - Delete planning budget
+        planningGroup.MapDelete("/{categoryId:int}/{scenarioId:int}/{year:int}", async (int categoryId, int scenarioId, int year, IPlanningService planningService) =>
         {
-            await planningService.DeletePlanningBudgetAsync(categoryId, year);
+            await planningService.DeletePlanningBudgetAsync(categoryId, scenarioId, year);
             return Results.Ok();
         })
         .WithName("DeletePlanningBudget")
@@ -59,4 +60,4 @@ public static class PlanningEndpoints
     }
 }
 
-public record SavePlanningBudgetRequest(int CategoryId, int Year, decimal PlannedAmount);
+public record SavePlanningBudgetRequest(int CategoryId, int ScenarioId, int Year, decimal PlannedAmount);

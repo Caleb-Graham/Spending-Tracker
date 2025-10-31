@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SpendingTrackerApi.Data;
 
@@ -10,9 +11,11 @@ using SpendingTrackerApi.Data;
 namespace spending_tracker_api.Migrations
 {
     [DbContext(typeof(SpendingDbContext))]
-    partial class SpendingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250811202201_RemoveIsDefaultFromScenario")]
+    partial class RemoveIsDefaultFromScenario
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
