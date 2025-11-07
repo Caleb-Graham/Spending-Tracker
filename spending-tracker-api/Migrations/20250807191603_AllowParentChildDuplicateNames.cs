@@ -21,7 +21,7 @@ namespace spending_tracker_api.Migrations
                 table: "Categories",
                 columns: new[] { "Name", "Type", "ParentCategoryId" },
                 unique: true,
-                filter: "ParentCategoryId IS NULL");
+                filter: "\"ParentCategoryId\" IS NULL");
 
             // Create unique index for child categories (ParentCategoryId is not null)
             migrationBuilder.CreateIndex(
@@ -29,7 +29,7 @@ namespace spending_tracker_api.Migrations
                 table: "Categories",
                 columns: new[] { "Name", "Type", "ParentCategoryId" },
                 unique: true,
-                filter: "ParentCategoryId IS NOT NULL");
+                filter: "\"ParentCategoryId\" IS NOT NULL");
         }
 
         /// <inheritdoc />

@@ -18,9 +18,26 @@ builder.Services.Configure<JsonOptions>(options =>
     options.SerializerOptions.MaxDepth = 32;
 });
 
-// Configure SQLite
+// Configure PostgreSQL
+// Read from env var first, fall back to appsettings
+var connectionString = builder.Configuration.GetConnectionString("Default")
+                       ?? Environment.GetEnvironmentVariable("ConnectionStrings__Default")
+                       ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+
+// Configure Npgsql to handle timestamps without timezone info
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 builder.Services.AddDbContext<SpendingDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        // Optional: configure Npgsql-specific options here
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorCodesToAdd: null);
+    });
+});
 
 // Configure CORS for React frontend
 builder.Services.AddCors(options =>

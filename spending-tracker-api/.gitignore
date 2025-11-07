@@ -10,10 +10,13 @@ out/
 !.vscode/launch.json
 !.vscode/extensions.json
 
-## SQLite database files
-*.db
-*.db-shm
-*.db-wal
+## Sensitive configuration files
+appsettings.Development.json
+
+## Migration scripts and data exports
+*.csv
+export_*.sh
+import_*.sh
 
 ## User-specific files
 *.rsuser

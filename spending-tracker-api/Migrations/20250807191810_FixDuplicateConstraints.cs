@@ -19,14 +19,14 @@ namespace spending_tracker_api.Migrations
                 table: "Categories",
                 columns: new[] { "Name", "Type", "ParentCategoryId" },
                 unique: true,
-                filter: "ParentCategoryId IS NULL");
+                filter: "\"ParentCategoryId\" IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Categories_Name_Type_ParentCategoryId_Children",
                 table: "Categories",
                 columns: new[] { "Name", "Type", "ParentCategoryId" },
                 unique: true,
-                filter: "ParentCategoryId IS NOT NULL");
+                filter: "\"ParentCategoryId\" IS NOT NULL");
         }
 
         /// <inheritdoc />
