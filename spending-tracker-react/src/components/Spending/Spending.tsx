@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { uploadTransactions, getTransactions, getAllCategories, type Transaction, type Category } from '../../services';
+import { useUser } from '@stackframe/react';
+import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, type Transaction, type Category } from '../../services';
 import {
   Table,
   TableBody,
@@ -19,8 +20,15 @@ import {
   TextField,
   Chip,
   Typography,
-  TableSortLabel
+  TableSortLabel,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar
 } from '@mui/material';
+import { Edit as EditIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -30,10 +38,12 @@ type SortField = 'date' | 'note' | 'category' | 'amount' | 'type';
 type SortDirection = 'asc' | 'desc';
 
 const Spending = () => {
+  const user = useUser();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,17 +59,57 @@ const Spending = () => {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    date: '',
+    note: '',
+    amount: '',
+    categoryId: ''
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
+
+  // Create transaction dialog state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createFormData, setCreateFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    note: '',
+    amount: '',
+    categoryId: '',
+    isIncome: false
+  });
+  const [isCreating, setIsCreating] = useState(false);
+
   const loadTransactions = async () => {
+    if (!user) {
+      setError('Please sign in to view transactions');
+      return;
+    }
+
     setIsLoading(true);
+    setError(null);
     try {
+      // Get JWT token from Neon Auth
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        throw new Error('No access token available');
+      }
+
+      // Load data from Neon Data API
       const [transactionData, categoryData] = await Promise.all([
-        getTransactions(),
-        getAllCategories()
+        getTransactionsNeon(accessToken),
+        getAllCategoriesNeon(accessToken)
       ]);
       setTransactions(transactionData);
       setCategories(categoryData);
     } catch (error) {
-      alert('Failed to load data: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError('Failed to load data: ' + errorMessage);
+      console.error('Error loading transactions:', error);
     } finally {
       setIsLoading(false);
     }
@@ -67,9 +117,10 @@ const Spending = () => {
 
   useEffect(() => {
     loadTransactions();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
@@ -209,36 +260,195 @@ const Spending = () => {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setIsUploading(true);
-      try {
-        const result = await uploadTransactions(file);
-        await loadTransactions(); // Refresh the data
-        
-        // Show detailed import results
-        if (result.details) {
-          const { newTransactions, duplicatesSkipped, totalRecords } = result.details;
-          let alertMessage = `Import completed!\n\n`;
-          alertMessage += `• ${newTransactions} new transactions added\n`;
-          if (duplicatesSkipped > 0) {
-            alertMessage += `• ${duplicatesSkipped} duplicates skipped\n`;
-          }
-          alertMessage += `• ${totalRecords} total records processed`;
-          alert(alertMessage);
-        } else {
-          alert(result.message || 'File uploaded successfully');
-        }
-      } catch (error) {
-        alert('Failed to upload file: ' + (error instanceof Error ? error.message : 'Unknown error'));
-      } finally {
-        setIsUploading(false);
+    if (!file || !user) {
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+    try {
+      // Get JWT token from Neon Auth
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        throw new Error('No access token available');
       }
+
+      // Upload CSV via Neon Data API
+      const result = await uploadTransactionsNeon(file, accessToken);
+
+      // Show result summary
+      alert(
+        `Upload complete!\n\n` +
+        `Total records: ${result.totalRecords}\n` +
+        `New transactions added: ${result.newTransactionsAdded}\n` +
+        `Duplicates skipped: ${result.duplicatesSkipped}`
+      );
+
+      // Reload transactions after successful upload
+      await loadTransactions();
+
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError('Failed to upload CSV: ' + errorMessage);
+      console.error('Error uploading file:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleEditClick = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setEditFormData({
+      date: transaction.date.split('T')[0],
+      note: transaction.note,
+      amount: Math.abs(transaction.amount).toString(),
+      categoryId: transaction.category?.categoryId.toString() || ''
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditClose = () => {
+    setEditDialogOpen(false);
+    setEditingTransaction(null);
+    setEditFormData({ date: '', note: '', amount: '', categoryId: '' });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTransaction || !user) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        throw new Error('No access token available');
+      }
+
+      const amount = parseFloat(editFormData.amount);
+      if (isNaN(amount)) {
+        setNotification({ message: 'Invalid amount', severity: 'error' });
+        return;
+      }
+
+      await updateTransactionNeon(
+        editingTransaction.transactionId,
+        {
+          date: editFormData.date,
+          note: editFormData.note,
+          amount: editFormData.amount ? amount : undefined,
+          categoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : null
+        },
+        accessToken
+      );
+
+      setNotification({ message: 'Transaction updated successfully', severity: 'success' });
+      handleEditClose();
+      await loadTransactions();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setNotification({ message: `Failed to update: ${errorMessage}`, severity: 'error' });
+      console.error('Error updating transaction:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCreateOpen = () => {
+    setCreateFormData({
+      date: new Date().toISOString().split('T')[0],
+      note: '',
+      amount: '',
+      categoryId: '',
+      isIncome: false
+    });
+    setCreateDialogOpen(true);
+  };
+
+  const handleCreateClose = () => {
+    setCreateDialogOpen(false);
+    setCreateFormData({
+      date: new Date().toISOString().split('T')[0],
+      note: '',
+      amount: '',
+      categoryId: '',
+      isIncome: false
+    });
+  };
+
+  const handleCreateTransaction = async () => {
+    if (!user) {
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        throw new Error('No access token available');
+      }
+
+      const amount = parseFloat(createFormData.amount);
+      if (isNaN(amount) || amount <= 0) {
+        setNotification({ message: 'Please enter a valid amount', severity: 'error' });
+        return;
+      }
+
+      if (!createFormData.note.trim()) {
+        setNotification({ message: 'Please enter a description', severity: 'error' });
+        return;
+      }
+
+      await createTransactionNeon(
+        {
+          date: createFormData.date,
+          note: createFormData.note,
+          amount: amount,
+          categoryId: createFormData.categoryId ? parseInt(createFormData.categoryId) : undefined,
+          isIncome: createFormData.isIncome
+        },
+        accessToken
+      );
+
+      setNotification({ message: 'Transaction created successfully', severity: 'success' });
+      handleCreateClose();
+      await loadTransactions();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setNotification({ message: `Failed to create: ${errorMessage}`, severity: 'error' });
+      console.error('Error creating transaction:', error);
+    } finally {
+      setIsCreating(false);
     }
   };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <div className="spending-container">
+        {/* Authentication Check */}
+        {!user && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Please <a href="/handler/sign-in">sign in</a> to view your transactions.
+          </Alert>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
         <div className="spending-header">
           <h2>My Spending</h2>
           <div className="upload-section">
@@ -251,8 +461,15 @@ const Spending = () => {
             />
             <Button
               variant="contained"
+              onClick={() => handleCreateOpen()}
+              sx={{ mr: 1 }}
+            >
+              + New Transaction
+            </Button>
+            <Button
+              variant="contained"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
+              disabled={isUploading || !user}
             >
               {isUploading ? 'Uploading...' : 'Import Transactions'}
             </Button>
@@ -411,6 +628,7 @@ const Spending = () => {
                     Type
                   </TableSortLabel>
                 </TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -437,7 +655,7 @@ const Spending = () => {
                       backgroundColor: transaction.isIncome ? 'rgba(76, 175, 80, 0.1)' : undefined
                     }}
                   >
-                    <TableCell>{new Date(transaction.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{transaction.date.split('T')[0]}</TableCell>
                     <TableCell>{transaction.note}</TableCell>
                     <TableCell>{transaction.category?.name || 'Uncategorized'}</TableCell>
                     <TableCell align="right" sx={{ 
@@ -449,6 +667,16 @@ const Spending = () => {
                       })}
                     </TableCell>
                     <TableCell>{transaction.isIncome ? 'INCOME' : 'EXPENSE'}</TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={() => handleEditClick(transaction)}
+                        variant="outlined"
+                      >
+                        Edit
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -469,6 +697,139 @@ const Spending = () => {
             showLastButton
           />
         </Box>
+
+        {/* Edit Transaction Dialog */}
+        <Dialog open={editDialogOpen} onClose={handleEditClose} maxWidth="sm" fullWidth>
+          <DialogTitle>Edit Transaction</DialogTitle>
+          <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Date"
+              type="date"
+              value={editFormData.date}
+              onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Description"
+              value={editFormData.note}
+              onChange={(e) => setEditFormData({ ...editFormData, note: e.target.value })}
+              fullWidth
+            />
+            <TextField
+              label="Amount"
+              type="number"
+              value={editFormData.amount}
+              onChange={(e) => setEditFormData({ ...editFormData, amount: e.target.value })}
+              fullWidth
+              inputProps={{ step: '0.01', min: '0' }}
+            />
+            <FormControl fullWidth>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={editFormData.categoryId}
+                label="Category"
+                onChange={(e) => setEditFormData({ ...editFormData, categoryId: e.target.value })}
+              >
+                <MenuItem value="">
+                  <em>Uncategorized</em>
+                </MenuItem>
+                {categories.map((category) => (
+                  <MenuItem key={category.categoryId} value={category.categoryId.toString()}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleEditClose}>Cancel</Button>
+            <Button
+              onClick={handleSaveEdit}
+              variant="contained"
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Create Transaction Dialog */}
+        <Dialog open={createDialogOpen} onClose={handleCreateClose} maxWidth="sm" fullWidth>
+          <DialogTitle>New Transaction</DialogTitle>
+          <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Date"
+              type="date"
+              value={createFormData.date}
+              onChange={(e) => setCreateFormData({ ...createFormData, date: e.target.value })}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Description"
+              value={createFormData.note}
+              onChange={(e) => setCreateFormData({ ...createFormData, note: e.target.value })}
+              fullWidth
+              placeholder="e.g., Coffee, Gas, Paycheck"
+            />
+            <TextField
+              label="Amount"
+              type="number"
+              value={createFormData.amount}
+              onChange={(e) => setCreateFormData({ ...createFormData, amount: e.target.value })}
+              fullWidth
+              inputProps={{ step: '0.01', min: '0' }}
+              placeholder="0.00"
+            />
+            <FormControl fullWidth>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={createFormData.isIncome ? 'income' : 'expense'}
+                label="Type"
+                onChange={(e) => setCreateFormData({ ...createFormData, isIncome: e.target.value === 'income' })}
+              >
+                <MenuItem value="expense">Expense</MenuItem>
+                <MenuItem value="income">Income</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={createFormData.categoryId}
+                label="Category"
+                onChange={(e) => setCreateFormData({ ...createFormData, categoryId: e.target.value })}
+              >
+                <MenuItem value="">
+                  <em>Uncategorized</em>
+                </MenuItem>
+                {getFilteredCategories().map((category) => (
+                  <MenuItem key={category.categoryId} value={category.categoryId.toString()}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCreateClose}>Cancel</Button>
+            <Button
+              onClick={handleCreateTransaction}
+              variant="contained"
+              disabled={isCreating}
+            >
+              {isCreating ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Notification Snackbar */}
+        <Snackbar
+          open={notification !== null}
+          autoHideDuration={6000}
+          onClose={() => setNotification(null)}
+          message={notification?.message}
+        />
       </div>
     </LocalizationProvider>
   );

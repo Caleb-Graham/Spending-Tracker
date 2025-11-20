@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useUser } from '@stackframe/react';
 import {
   Typography,
   Paper,
@@ -21,30 +22,29 @@ import {
   Snackbar,
   Card,
   CardContent,
-  CardActions,
-  Divider
+  Divider,
+  Menu
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  DragIndicator as DragIcon
+  DragIndicator as DragIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { 
-  getCategoryMappings, 
-  getParentCategories, 
-  createCategoryMapping, 
-  updateCategoryMapping, 
-  deleteCategoryMapping,
-  createParentCategory,
-  updateParentCategory,
-  deleteParentCategory,
+  getCategoryMappingsNeon, 
+  getParentCategoriesNeon, 
+  createCategoryMappingNeon, 
+  updateCategoryMappingNeon, 
+  deleteCategoryMappingNeon,
+  createParentCategoryNeon,
+  updateParentCategoryNeon,
+  deleteParentCategoryNeon,
   type CategoryMapping as APICategoryMapping, 
-  type Category,
-  type CreateParentCategoryRequest,
-  type UpdateParentCategoryRequest
+  type Category
 } from '../../services';
 import './Categories.css';
 
@@ -80,8 +80,10 @@ const DraggableChildChip: React.FC<{
   onEdit: (mapping: CategoryMapping) => void;
   onDelete: (id: number) => void;
   onMove: (childId: number, newParentId: number) => void;
-}> = ({ mapping, parentCategories, onEdit, onDelete, onMove }) => {
+  isUnassigned?: boolean;
+}> = ({ mapping, parentCategories, onEdit, onDelete, onMove, isUnassigned = false }) => {
   const currentParent = parentCategories.find(p => p.name === mapping.parentCategory);
+  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.CHILD_CATEGORY,
@@ -96,23 +98,71 @@ const DraggableChildChip: React.FC<{
     }),
   }));
 
+  const handleQuickAssignClick = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleQuickAssign = (parentId: number) => {
+    onMove(mapping.id, parentId);
+    setAnchorEl(null);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
   return (
-    <div style={{ opacity: isDragging ? 0.5 : 1, display: 'inline-block' }}>
+    <div style={{ opacity: isDragging ? 0.5 : 1, display: 'inline-block', position: 'relative' }}>
       <div ref={drag as any}>
         <Chip
           label={
             <Box display="flex" alignItems="center" gap={0.5}>
-              <DragIcon style={{ fontSize: '12px', cursor: 'grab' }} />
+              {isUnassigned && <WarningIcon style={{ fontSize: '12px' }} />}
+              {!isUnassigned && <DragIcon style={{ fontSize: '12px', cursor: 'grab' }} />}
               {mapping.categoryName}
             </Box>
           }
           size="small"
-          style={{ margin: '2px', cursor: 'grab' }}
+          style={{ 
+            margin: '2px', 
+            cursor: 'grab',
+            backgroundColor: isUnassigned ? '#fff3e0' : undefined,
+            borderColor: isUnassigned ? '#ff9800' : undefined,
+            border: isUnassigned ? '1px solid #ff9800' : undefined
+          }}
+          variant={isUnassigned ? "outlined" : "filled"}
           onDelete={() => onDelete(mapping.id)}
-          onClick={() => onEdit(mapping)}
+          onClick={isUnassigned ? handleQuickAssignClick : () => onEdit(mapping)}
           clickable
         />
       </div>
+      
+      {/* Quick Assign Menu for Unassigned Categories */}
+      {isUnassigned && (
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={handleClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <MenuItem disabled>
+            <Typography variant="caption">Assign to parent:</Typography>
+          </MenuItem>
+          {parentCategories
+            .filter(p => p.name !== 'Unassigned')
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(parent => (
+              <MenuItem 
+                key={parent.categoryId}
+                onClick={() => handleQuickAssign(parent.categoryId)}
+              >
+                {parent.name}
+              </MenuItem>
+            ))}
+        </Menu>
+      )}
     </div>
   );
 };
@@ -227,6 +277,7 @@ const DroppableParentCard: React.FC<{
 };
 
 const Categories = () => {
+  const user = useUser();
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
   const [selectedCategoryType, setSelectedCategoryType] = useState<'Income' | 'Expense'>('Expense');
@@ -314,9 +365,21 @@ const Categories = () => {
   }, [selectedCategoryType]);
 
   const loadData = async () => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      await Promise.all([loadParentCategories(), loadCategoryMappings()]);
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+      
+      if (!accessToken) {
+        showNotification('Failed to authenticate', 'error');
+        return;
+      }
+
+      await Promise.all([
+        loadParentCategories(accessToken),
+        loadCategoryMappings(accessToken)
+      ]);
     } catch (error) {
       showNotification('Failed to load data', 'error');
     } finally {
@@ -324,9 +387,9 @@ const Categories = () => {
     }
   };
 
-  const loadParentCategories = async () => {
+  const loadParentCategories = async (accessToken: string) => {
     try {
-      const categories = await getParentCategories(selectedCategoryType);
+      const categories = await getParentCategoriesNeon(accessToken, selectedCategoryType);
       setParentCategories(categories);
     } catch (error) {
       console.error('Failed to load parent categories:', error);
@@ -334,9 +397,9 @@ const Categories = () => {
     }
   };
 
-  const loadCategoryMappings = async () => {
+  const loadCategoryMappings = async (accessToken: string) => {
     try {
-      const mappings = await getCategoryMappings(selectedCategoryType);
+      const mappings = await getCategoryMappingsNeon(accessToken, selectedCategoryType);
       setCategoryMappings(mappings.map((m: APICategoryMapping) => ({
         id: m.categoryId,
         categoryName: m.categoryName,
@@ -376,15 +439,28 @@ const Categories = () => {
 
   const handleSave = async () => {
     try {
+      if (!user) {
+        showNotification('Please sign in to save', 'error');
+        return;
+      }
+
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        showNotification('Failed to authenticate', 'error');
+        return;
+      }
+
       if (dialogState.type === 'parent') {
         if (dialogState.action === 'create') {
-          await createParentCategory({
+          await createParentCategoryNeon(accessToken, {
             name: formData.name,
             type: selectedCategoryType
           });
           showNotification('Parent category created successfully', 'success');
         } else {
-          await updateParentCategory(dialogState.data.categoryId, {
+          await updateParentCategoryNeon(accessToken, dialogState.data.categoryId, {
             name: formData.name,
             type: selectedCategoryType
           });
@@ -392,14 +468,14 @@ const Categories = () => {
         }
       } else {
         if (dialogState.action === 'create') {
-          await createCategoryMapping({
+          await createCategoryMappingNeon(accessToken, {
             categoryName: formData.categoryName,
             type: selectedCategoryType,
             parentCategoryId: formData.parentCategoryId
           });
           showNotification('Child category created successfully', 'success');
         } else {
-          await updateCategoryMapping(dialogState.data.id, {
+          await updateCategoryMappingNeon(accessToken, dialogState.data.id, {
             categoryName: formData.categoryName,
             parentCategoryId: formData.parentCategoryId
           });
@@ -419,11 +495,24 @@ const Categories = () => {
     }
 
     try {
+      if (!user) {
+        showNotification('Please sign in to delete', 'error');
+        return;
+      }
+
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        showNotification('Failed to authenticate', 'error');
+        return;
+      }
+
       if (type === 'parent') {
-        await deleteParentCategory(id);
+        await deleteParentCategoryNeon(accessToken, id);
         showNotification('Parent category deleted successfully', 'success');
       } else {
-        await deleteCategoryMapping(id);
+        await deleteCategoryMappingNeon(accessToken, id);
         showNotification('Child category deleted successfully', 'success');
       }
       await loadData();
@@ -434,6 +523,19 @@ const Categories = () => {
 
   const handleMoveChild = async (childId: number, newParentId: number) => {
     try {
+      if (!user) {
+        showNotification('Please sign in to move categories', 'error');
+        return;
+      }
+
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        showNotification('Failed to authenticate', 'error');
+        return;
+      }
+
       const childMapping = categoryMappings.find(m => m.id === childId);
       
       if (!childMapping) {
@@ -441,7 +543,7 @@ const Categories = () => {
         return;
       }
       
-      await updateCategoryMapping(childId, {
+      await updateCategoryMappingNeon(accessToken, childId, {
         categoryName: childMapping.categoryName,
         parentCategoryId: newParentId
       });
@@ -515,13 +617,22 @@ const Categories = () => {
                   gridColumn: '1 / -1', 
                   margin: '10px', 
                   padding: '16px', 
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: '#fff3e0',
+                  border: '2px solid #ff9800',
                   marginBottom: '20px'
                 }}>
-                  <Box display="flex" justifyContent="flex-start" alignItems="center" marginBottom={1}>
-                    <Typography variant="subtitle1" color="textSecondary">
-                      Unassigned:
-                    </Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" marginBottom={2}>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <WarningIcon sx={{ color: '#ff9800', fontSize: '24px' }} />
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e65100' }}>
+                          Unassigned Categories ({unassignedMappings.length})
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          Click a category to quickly assign it to a parent
+                        </Typography>
+                      </Box>
+                    </Box>
                   </Box>
                   <Box display="flex" flexWrap="wrap" gap={1}>
                     {unassignedMappings.map(mapping => (
@@ -532,6 +643,7 @@ const Categories = () => {
                         onEdit={(mapping) => openDialog('child', 'edit', mapping)}
                         onDelete={(id) => handleDelete('child', id)}
                         onMove={handleMoveChild}
+                        isUnassigned={true}
                       />
                     ))}
                   </Box>

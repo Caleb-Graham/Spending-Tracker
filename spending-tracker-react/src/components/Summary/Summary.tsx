@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useUser } from '@stackframe/react';
 import { 
   Select, 
   MenuItem, 
@@ -13,13 +14,28 @@ import {
   Paper,
   CircularProgress,
   Typography,
-  Box
+  Box,
+  Alert,
+  ToggleButton,
+  ToggleButtonGroup,
+  IconButton,
+  Button
 } from '@mui/material';
+import { ExpandMore, ExpandLess } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { startOfYear, subDays, format } from 'date-fns';
-import { getCategorySummary, getIncomeExpenseSummary, getAllCategories, getDetailedCategorySummary, getTransactions, type CategorySummary, type Category, type DetailedCategorySummary, type Transaction } from '../../services';
+import { 
+  getCategorySummaryNeon, 
+  getIncomeExpenseSummaryNeon, 
+  getAllCategoriesNeon, 
+  getDetailedCategorySummaryNeon, 
+  getTransactionsNeon,
+  type CategorySummary, 
+  type Category, 
+  type DetailedCategorySummary
+} from '../../services';
 import SankeyDiagram from '../SankeyDiagram/SankeyDiagram';
 import D3PieChart from '../D3PieChart/D3PieChart';
 import './Summary.css';
@@ -33,6 +49,7 @@ const dateRangeOptions = [
 ];
 
 const Summary = () => {
+  const user = useUser();
   // Load date range from localStorage or default to 'ytd'
   const [dateRange, setDateRange] = useState(() => {
     const saved = localStorage.getItem('summary-date-range');
@@ -86,22 +103,143 @@ const Summary = () => {
   const [incomeExpenseData, setIncomeExpenseData] = useState<{ income: CategorySummary[], expenses: CategorySummary[] }>({ income: [], expenses: [] });
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'income' | 'expenses'>('expenses');
+  const [expandedParents, setExpandedParents] = useState<Set<number>>(new Set());
+  const loadingRef = useRef(false);
+  const earliestDateCache = useRef<Date | null>(null);
+
+  // Helper function to group categories by parent
+  const groupByParent = (categories: any[]) => {
+    const parentMap = new Map<number | string, any>();
+    const childrenByParent = new Map<number | string, any[]>();
+    
+    // Build a map of category IDs to names from allCategories
+    const categoryNameMap = new Map<number, string>();
+    allCategories.forEach(cat => {
+      categoryNameMap.set(cat.categoryId, cat.name);
+    });
+
+    // First pass: separate parents and children
+    categories.forEach(cat => {
+      // Check if this category has a parent
+      if (cat.parentCategoryId !== null && cat.parentCategoryId !== undefined) {
+        // This is a child category
+        const parentId = cat.parentCategoryId;
+        // Try to get parent name from API response, then from allCategories
+        const parentName = cat.parentCategoryName || categoryNameMap.get(parentId);
+        
+        // Only create parent entry if we have a name for it
+        if (parentName && !parentMap.has(parentId)) {
+          parentMap.set(parentId, {
+            categoryId: parentId,
+            categoryName: parentName,
+            amount: 0,
+            percentage: 0,
+            isParent: true,
+            children: []
+          });
+          childrenByParent.set(parentId, []);
+        }
+        
+        // Add this child to the parent's children if parent exists
+        if (childrenByParent.has(parentId)) {
+          childrenByParent.get(parentId)!.push(cat);
+        }
+      } else {
+        // No parent - treat as a standalone/root category
+        if (!parentMap.has(cat.categoryId)) {
+          parentMap.set(cat.categoryId, {
+            categoryId: cat.categoryId,
+            categoryName: cat.categoryName,
+            amount: cat.amount,
+            percentage: cat.percentage,
+            isParent: false,
+            children: []
+          });
+        }
+      }
+    });
+
+    // Assign children to parents and calculate totals
+    childrenByParent.forEach((children, parentId) => {
+      const parent = parentMap.get(parentId)!;
+      parent.children = children;
+      // Calculate parent total from children
+      parent.amount = children.reduce((sum: number, child: any) => sum + (child.amount || 0), 0);
+    });
+
+    // Calculate percentages based on all amounts
+    const parents = Array.from(parentMap.values());
+    const totalAmount = parents.reduce((sum, parent) => sum + (parent.amount || 0), 0);
+    
+    parents.forEach(parent => {
+      parent.percentage = totalAmount > 0 ? (parent.amount / totalAmount) * 100 : 0;
+    });
+
+    return parents.sort((a, b) => b.amount - a.amount);
+  };
+
+  const toggleParent = (parentId: number) => {
+    setExpandedParents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(parentId)) {
+        newSet.delete(parentId);
+      } else {
+        newSet.add(parentId);
+      }
+      return newSet;
+    });
+  };
+
+  const expandAllParents = (categories: any[]) => {
+    // Extract all unique parent IDs from the categories
+    const parentIds = new Set<number>();
+    categories.forEach(cat => {
+      if (cat.parentCategoryId !== null && cat.parentCategoryId !== undefined) {
+        parentIds.add(cat.parentCategoryId);
+      }
+    });
+    setExpandedParents(parentIds);
+  };
+
+  const collapseAllParents = () => {
+    setExpandedParents(new Set());
+  };
 
   // Function to get the earliest transaction date
   const getEarliestTransactionDate = async (): Promise<Date> => {
+    // Return cached value if available
+    if (earliestDateCache.current) {
+      return earliestDateCache.current;
+    }
+
+    if (!user) {
+      return new Date();
+    }
+
     try {
-      const transactions = await getTransactions();
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        return new Date();
+      }
+
+      const transactions = await getTransactionsNeon(accessToken);
       if (transactions.length === 0) {
         // If no transactions, default to current date
         return new Date();
       }
       
       // Find the earliest transaction date
-      const earliestDate = transactions.reduce((earliest, transaction) => {
+      const earliestDate = transactions.reduce((earliest: Date, transaction) => {
         const transactionDate = new Date(transaction.date);
         return transactionDate < earliest ? transactionDate : earliest;
       }, new Date(transactions[0].date));
       
+      // Cache the result
+      earliestDateCache.current = earliestDate;
       return earliestDate;
     } catch (error) {
       console.error('Failed to fetch transactions for earliest date:', error);
@@ -111,17 +249,37 @@ const Summary = () => {
   };
 
   const loadCategorySummary = async (startDate?: Date, endDate?: Date) => {
+    if (!user) {
+      setError('Please sign in to view summary');
+      return;
+    }
+
+    // Prevent duplicate calls
+    if (loadingRef.current) {
+      return;
+    }
+
+    loadingRef.current = true;
     setIsLoading(true);
+    setError(null);
     try {
+      // Get JWT token from Neon Auth
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        throw new Error('No access token available');
+      }
+
       const startDateStr = startDate ? startDate.toISOString().split('T')[0] : undefined;
       const endDateStr = endDate ? endDate.toISOString().split('T')[0] : undefined;
       
-      // Load all data we need for the Sankey diagram
+      // Load all data we need for the Sankey diagram - using Neon APIs
       const [summary, detailedSummary, incomeExpense, categories] = await Promise.all([
-        getCategorySummary(startDateStr, endDateStr),
-        getDetailedCategorySummary(startDateStr, endDateStr),
-        getIncomeExpenseSummary(startDateStr, endDateStr),
-        getAllCategories()
+        getCategorySummaryNeon(accessToken, startDateStr, endDateStr),
+        getDetailedCategorySummaryNeon(accessToken, startDateStr, endDateStr),
+        getIncomeExpenseSummaryNeon(accessToken, startDateStr, endDateStr),
+        getAllCategoriesNeon(accessToken)
       ]);
       
       setCategorySummary(summary);
@@ -129,6 +287,8 @@ const Summary = () => {
       setIncomeExpenseData(incomeExpense);
       setAllCategories(categories);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError('Failed to load data: ' + errorMessage);
       console.error('Failed to load category summary:', error);
       setCategorySummary([]);
       setDetailedCategorySummary([]);
@@ -136,6 +296,7 @@ const Summary = () => {
       setAllCategories([]);
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
   };
 
@@ -178,15 +339,16 @@ const Summary = () => {
     // Load data based on current date selection
     const loadData = async () => {
       if (startDate && endDate) {
-        loadCategorySummary(startDate, endDate);
+        await loadCategorySummary(startDate, endDate);
       } else {
         const { start, end } = await getDateRangeForSelection(dateRange);
-        loadCategorySummary(start, end);
+        await loadCategorySummary(start, end);
       }
     };
     
     loadData();
-  }, [dateRange, startDate, endDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, startDate?.toISOString(), endDate?.toISOString(), user?.id]);
 
   const handleDateRangeChange = async (event: any) => {
     const value = event.target.value;
@@ -347,6 +509,20 @@ const Summary = () => {
 
   return (
     <div className="summary-container">
+      {/* Authentication Check */}
+      {!user && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Please <a href="/handler/sign-in">sign in</a> to view your summary.
+        </Alert>
+      )}
+
+      {/* Error Display */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       {/* Page Header */}
       <div className="summary-page-header">
         <Typography variant="h4" component="h1" gutterBottom>
@@ -407,31 +583,63 @@ const Summary = () => {
         </div>
       </div>
 
-      {/* Income and Expense Tables Side by Side */}
-      <Box display="flex" gap={3} style={{ marginTop: '16px' }} flexDirection={{ xs: 'column', md: 'row' }}>
-        {/* Expense Categories Table */}
-        <Box flex={1}>
-          <Paper style={{ padding: '20px', height: '500px', overflow: 'auto' }}>
-            <Typography variant="h6" gutterBottom>
-              Expense Categories
-            </Typography>
-            <TableContainer>
-              <Table className="category-table" size="small">
-                <TableHead>
+      {/* Income and Expense Table with Toggle */}
+      <Box style={{ marginTop: '16px' }}>
+        <Paper style={{ padding: '20px' }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Box display="flex" alignItems="center" gap={2}>
+              <Typography variant="h6">
+                {viewMode === 'expenses' ? 'Expense Categories' : 'Income Categories'}
+              </Typography>
+              <Button
+                size="small"
+                onClick={() => {
+                  const data = viewMode === 'expenses' ? detailedCategorySummary : incomeExpenseData.income;
+                  expandAllParents(data);
+                }}
+              >
+                Expand All
+              </Button>
+              <Button
+                size="small"
+                onClick={collapseAllParents}
+              >
+                Collapse All
+              </Button>
+            </Box>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(_, newViewMode) => {
+                if (newViewMode !== null) {
+                  setViewMode(newViewMode);
+                }
+              }}
+              size="small"
+            >
+              <ToggleButton value="expenses">Expenses</ToggleButton>
+              <ToggleButton value="income">Income</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          
+          <TableContainer>
+            <Table className="category-table" size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Category</strong></TableCell>
+                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                  <TableCell align="right"><strong>% of Total</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isLoading ? (
                   <TableRow>
-                    <TableCell><strong>Category</strong></TableCell>
-                    <TableCell align="right"><strong>Amount</strong></TableCell>
-                    <TableCell align="right"><strong>% of Total</strong></TableCell>
+                    <TableCell colSpan={3} align="center">
+                      <CircularProgress />
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center">
-                        <CircularProgress />
-                      </TableCell>
-                    </TableRow>
-                  ) : incomeExpenseData.expenses.length === 0 ? (
+                ) : viewMode === 'expenses' ? (
+                  detailedCategorySummary.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} align="center">
                         No expense data found for the selected date range.
@@ -439,121 +647,208 @@ const Summary = () => {
                     </TableRow>
                   ) : (
                     <>
-                      {incomeExpenseData.expenses.map((category) => (
-                        <TableRow key={category.categoryId}>
-                          <TableCell>{category.categoryName}</TableCell>
-                          <TableCell align="right" className="amount-cell">
-                            ${category.amount.toLocaleString('en-US', { 
-                              minimumFractionDigits: 2, 
-                              maximumFractionDigits: 2 
-                            })}
-                          </TableCell>
-                          <TableCell align="right" className="percentage-cell">
-                            {category.percentage.toFixed(1)}%
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {/* Totals Row */}
-                      <TableRow sx={{ 
-                        borderTop: '2px solid #ddd',
-                        backgroundColor: '#f5f5f5',
-                        fontWeight: 'bold'
-                      }}>
-                        <TableCell sx={{ fontWeight: 'bold' }}>
-                          <strong>Total Expenses</strong>
-                        </TableCell>
-                        <TableCell align="right" className="amount-cell" sx={{ fontWeight: 'bold' }}>
-                          <strong>
-                            ${incomeExpenseData.expenses.reduce((sum, cat) => sum + cat.amount, 0).toLocaleString('en-US', { 
-                              minimumFractionDigits: 2, 
-                              maximumFractionDigits: 2 
-                            })}
-                          </strong>
-                        </TableCell>
-                        <TableCell align="right" className="percentage-cell" sx={{ fontWeight: 'bold' }}>
-                          <strong>100.0%</strong>
-                        </TableCell>
-                      </TableRow>
+                      {(() => {
+                        const groupedData = groupByParent(detailedCategorySummary);
+                        const totalAmount = detailedCategorySummary.reduce((sum, cat) => sum + cat.amount, 0);
+                        
+                        return (
+                          <>
+                            {groupedData.map((parentItem) => (
+                              <React.Fragment key={parentItem.categoryId}>
+                                <TableRow 
+                                  sx={{ 
+                                    backgroundColor: parentItem.isParent ? '#f9f9f9' : 'white',
+                                    '&:hover': { backgroundColor: parentItem.isParent ? '#f0f0f0' : 'white' }
+                                  }}
+                                >
+                                  <TableCell sx={{ paddingLeft: parentItem.isParent ? '16px' : '48px' }}>
+                                    <Box display="flex" alignItems="center" gap={1}>
+                                      {parentItem.isParent && parentItem.children && parentItem.children.length > 0 && (
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => toggleParent(parentItem.categoryId)}
+                                          sx={{ padding: '0px', minWidth: '32px' }}
+                                        >
+                                          {expandedParents.has(parentItem.categoryId) ? (
+                                            <ExpandLess fontSize="small" />
+                                          ) : (
+                                            <ExpandMore fontSize="small" />
+                                          )}
+                                        </IconButton>
+                                      )}
+                                      {!parentItem.isParent && <Box sx={{ width: '32px' }} />}
+                                      <span style={{ fontWeight: parentItem.isParent ? 'bold' : 'normal' }}>
+                                        {parentItem.categoryName}
+                                      </span>
+                                    </Box>
+                                  </TableCell>
+                                  <TableCell align="right" className="amount-cell" sx={{ fontWeight: parentItem.isParent ? 'bold' : 'normal' }}>
+                                    ${parentItem.amount.toLocaleString('en-US', { 
+                                      minimumFractionDigits: 2, 
+                                      maximumFractionDigits: 2 
+                                    })}
+                                  </TableCell>
+                                  <TableCell align="right" className="percentage-cell" sx={{ fontWeight: parentItem.isParent ? 'bold' : 'normal' }}>
+                                    {(parentItem.percentage).toFixed(1)}%
+                                  </TableCell>
+                                </TableRow>
+                                {parentItem.isParent && expandedParents.has(parentItem.categoryId) && parentItem.children && parentItem.children.map((child: any) => (
+                                  <TableRow 
+                                    key={`${parentItem.categoryId}-${child.categoryId}`}
+                                    sx={{ 
+                                      backgroundColor: '#fafafa',
+                                      borderLeft: '3px solid #2196F3'
+                                    }}
+                                  >
+                                    <TableCell sx={{ paddingLeft: '64px' }}>
+                                      {child.categoryName}
+                                    </TableCell>
+                                    <TableCell align="right" className="amount-cell">
+                                      ${child.amount.toLocaleString('en-US', { 
+                                        minimumFractionDigits: 2, 
+                                        maximumFractionDigits: 2 
+                                      })}
+                                    </TableCell>
+                                    <TableCell align="right" className="percentage-cell">
+                                      {(child.percentage).toFixed(1)}%
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </React.Fragment>
+                            ))}
+                            {/* Totals Row */}
+                            <TableRow sx={{ 
+                              borderTop: '2px solid #ddd',
+                              backgroundColor: '#f5f5f5',
+                              fontWeight: 'bold'
+                            }}>
+                              <TableCell sx={{ fontWeight: 'bold' }}>
+                                <strong>Total Expenses</strong>
+                              </TableCell>
+                              <TableCell align="right" className="amount-cell" sx={{ fontWeight: 'bold' }}>
+                                <strong>
+                                  ${totalAmount.toLocaleString('en-US', { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: 2 
+                                  })}
+                                </strong>
+                              </TableCell>
+                              <TableCell align="right" className="percentage-cell" sx={{ fontWeight: 'bold' }}>
+                                <strong>100.0%</strong>
+                              </TableCell>
+                            </TableRow>
+                          </>
+                        );
+                      })()}
                     </>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Box>
-
-        {/* Income Categories Table */}
-        <Box flex={1}>
-          <Paper style={{ padding: '20px', height: '500px', overflow: 'auto' }}>
-            <Typography variant="h6" gutterBottom>
-              Income Categories
-            </Typography>
-            <TableContainer>
-              <Table className="category-table" size="small">
-                <TableHead>
+                  )
+                ) : incomeExpenseData.income.length === 0 ? (
                   <TableRow>
-                    <TableCell><strong>Category</strong></TableCell>
-                    <TableCell align="right"><strong>Amount</strong></TableCell>
-                    <TableCell align="right"><strong>% of Total</strong></TableCell>
+                    <TableCell colSpan={3} align="center">
+                      No income data found for the selected date range.
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center">
-                        <CircularProgress />
-                      </TableCell>
-                    </TableRow>
-                  ) : incomeExpenseData.income.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center">
-                        No income data found for the selected date range.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <>
-                      {incomeExpenseData.income.map((category) => (
-                        <TableRow key={category.categoryId}>
-                          <TableCell>{category.categoryName}</TableCell>
-                          <TableCell align="right" className="amount-cell">
-                            ${category.amount.toLocaleString('en-US', { 
-                              minimumFractionDigits: 2, 
-                              maximumFractionDigits: 2 
-                            })}
-                          </TableCell>
-                          <TableCell align="right" className="percentage-cell">
-                            {category.percentage.toFixed(1)}%
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {/* Totals Row */}
-                      <TableRow sx={{ 
-                        borderTop: '2px solid #ddd',
-                        backgroundColor: '#f5f5f5',
-                        fontWeight: 'bold'
-                      }}>
-                        <TableCell sx={{ fontWeight: 'bold' }}>
-                          <strong>Total Income</strong>
-                        </TableCell>
-                        <TableCell align="right" className="amount-cell" sx={{ fontWeight: 'bold' }}>
-                          <strong>
-                            ${incomeExpenseData.income.reduce((sum, cat) => sum + cat.amount, 0).toLocaleString('en-US', { 
-                              minimumFractionDigits: 2, 
-                              maximumFractionDigits: 2 
-                            })}
-                          </strong>
-                        </TableCell>
-                        <TableCell align="right" className="percentage-cell" sx={{ fontWeight: 'bold' }}>
-                          <strong>100.0%</strong>
-                        </TableCell>
-                      </TableRow>
-                    </>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Box>
+                ) : (
+                  <>
+                    {(() => {
+                      const groupedData = groupByParent(incomeExpenseData.income);
+                      const totalAmount = incomeExpenseData.income.reduce((sum, cat) => sum + cat.amount, 0);
+                      
+                      return (
+                        <>
+                          {groupedData.map((parentItem) => (
+                            <React.Fragment key={parentItem.categoryId}>
+                              <TableRow 
+                                sx={{ 
+                                  backgroundColor: parentItem.isParent ? '#f9f9f9' : 'white',
+                                  '&:hover': { backgroundColor: parentItem.isParent ? '#f0f0f0' : 'white' }
+                                }}
+                              >
+                                <TableCell sx={{ paddingLeft: parentItem.isParent ? '16px' : '48px' }}>
+                                  <Box display="flex" alignItems="center" gap={1}>
+                                    {parentItem.isParent && parentItem.children && parentItem.children.length > 0 && (
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => toggleParent(parentItem.categoryId)}
+                                        sx={{ padding: '0px', minWidth: '32px' }}
+                                      >
+                                        {expandedParents.has(parentItem.categoryId) ? (
+                                          <ExpandLess fontSize="small" />
+                                        ) : (
+                                          <ExpandMore fontSize="small" />
+                                        )}
+                                      </IconButton>
+                                    )}
+                                    {!parentItem.isParent && <Box sx={{ width: '32px' }} />}
+                                    <span style={{ fontWeight: parentItem.isParent ? 'bold' : 'normal' }}>
+                                      {parentItem.categoryName}
+                                    </span>
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="right" className="amount-cell" sx={{ fontWeight: parentItem.isParent ? 'bold' : 'normal' }}>
+                                  ${parentItem.amount.toLocaleString('en-US', { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: 2 
+                                  })}
+                                </TableCell>
+                                <TableCell align="right" className="percentage-cell" sx={{ fontWeight: parentItem.isParent ? 'bold' : 'normal' }}>
+                                  {(parentItem.percentage).toFixed(1)}%
+                                </TableCell>
+                              </TableRow>
+                              {parentItem.isParent && expandedParents.has(parentItem.categoryId) && parentItem.children && parentItem.children.map((child: any) => (
+                                <TableRow 
+                                  key={`${parentItem.categoryId}-${child.categoryId}`}
+                                  sx={{ 
+                                    backgroundColor: '#fafafa',
+                                    borderLeft: '3px solid #2196F3'
+                                  }}
+                                >
+                                  <TableCell sx={{ paddingLeft: '64px' }}>
+                                    {child.categoryName}
+                                  </TableCell>
+                                  <TableCell align="right" className="amount-cell">
+                                    ${child.amount.toLocaleString('en-US', { 
+                                      minimumFractionDigits: 2, 
+                                      maximumFractionDigits: 2 
+                                    })}
+                                  </TableCell>
+                                  <TableCell align="right" className="percentage-cell">
+                                    {(child.percentage).toFixed(1)}%
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </React.Fragment>
+                          ))}
+                          {/* Totals Row */}
+                          <TableRow sx={{ 
+                            borderTop: '2px solid #ddd',
+                            backgroundColor: '#f5f5f5',
+                            fontWeight: 'bold'
+                          }}>
+                            <TableCell sx={{ fontWeight: 'bold' }}>
+                              <strong>Total Income</strong>
+                            </TableCell>
+                            <TableCell align="right" className="amount-cell" sx={{ fontWeight: 'bold' }}>
+                              <strong>
+                                ${totalAmount.toLocaleString('en-US', { 
+                                  minimumFractionDigits: 2, 
+                                  maximumFractionDigits: 2 
+                                })}
+                              </strong>
+                            </TableCell>
+                            <TableCell align="right" className="percentage-cell" sx={{ fontWeight: 'bold' }}>
+                              <strong>100.0%</strong>
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      );
+                    })()}
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       </Box>
 
       {/* Pie Chart Section */}

@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { startOfYear, subDays, format } from "date-fns";
-import { getTransactions, getNetWorthSnapshots } from "../services";
+import {
+  getTransactionsNeon,
+  getNetWorthSnapshotsNeon,
+  type Transaction,
+  type NetWorthSnapshot,
+} from "../services";
 
 export const dateRangeOptions = [
   { value: "ytd", label: "Year to Date" },
@@ -14,6 +19,7 @@ interface UseDateRangeOptions {
   storageKey?: string; // Prefix for localStorage keys to avoid conflicts between components
   defaultRange?: string;
   dataSource?: "transactions" | "networth"; // What data source to use for "All Time" earliest date
+  accessToken?: string; // Access token for Neon API calls
 }
 
 export interface DateRangeState {
@@ -37,6 +43,7 @@ export const useDateRange = (
     storageKey = "default",
     defaultRange = "ytd",
     dataSource = "transactions",
+    accessToken,
   } = options;
 
   // Load date range from localStorage or default
@@ -104,17 +111,28 @@ export const useDateRange = (
   // Function to get the earliest transaction date
   const getEarliestTransactionDate = async (): Promise<Date> => {
     try {
-      const transactions = await getTransactions();
+      // If no access token, return current date
+      if (!accessToken) {
+        console.warn(
+          "No access token provided for fetching earliest transaction date"
+        );
+        return new Date();
+      }
+
+      const transactions = await getTransactionsNeon(accessToken);
       if (transactions.length === 0) {
         // If no transactions, default to current date
         return new Date();
       }
 
       // Find the earliest transaction date
-      const earliestDate = transactions.reduce((earliest, transaction) => {
-        const transactionDate = new Date(transaction.date);
-        return transactionDate < earliest ? transactionDate : earliest;
-      }, new Date(transactions[0].date));
+      const earliestDate = transactions.reduce(
+        (earliest: Date, transaction: Transaction) => {
+          const transactionDate = new Date(transaction.date);
+          return transactionDate < earliest ? transactionDate : earliest;
+        },
+        new Date(transactions[0].date)
+      );
 
       return earliestDate;
     } catch (error) {
@@ -127,17 +145,28 @@ export const useDateRange = (
   // Function to get the earliest net worth snapshot date
   const getEarliestNetWorthDate = async (): Promise<Date> => {
     try {
-      const snapshots = await getNetWorthSnapshots();
+      // If no access token, return current date
+      if (!accessToken) {
+        console.warn(
+          "No access token provided for fetching earliest net worth date"
+        );
+        return new Date();
+      }
+
+      const snapshots = await getNetWorthSnapshotsNeon(accessToken);
       if (snapshots.length === 0) {
         // If no snapshots, default to current date
         return new Date();
       }
 
       // Find the earliest snapshot date
-      const earliestDate = snapshots.reduce((earliest, snapshot) => {
-        const snapshotDate = new Date(snapshot.date);
-        return snapshotDate < earliest ? snapshotDate : earliest;
-      }, new Date(snapshots[0].date));
+      const earliestDate = snapshots.reduce(
+        (earliest: Date, snapshot: NetWorthSnapshot) => {
+          const snapshotDate = new Date(snapshot.date);
+          return snapshotDate < earliest ? snapshotDate : earliest;
+        },
+        new Date(snapshots[0].date)
+      );
 
       return earliestDate;
     } catch (error) {

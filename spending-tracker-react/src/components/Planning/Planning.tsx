@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Typography,
-  Paper,
   TextField,
   Box,
   Button,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
-  Divider,
   Alert,
   Snackbar,
   Card,
@@ -19,22 +16,22 @@ import {
   LinearProgress,
   Collapse,
   IconButton,
-  Modal,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Chip
+  DialogActions
 } from '@mui/material';
 import {
-  Save as SaveIcon,
-  Calculate as CalculateIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   PieChart as PieChartIcon,
   Settings as SettingsIcon
 } from '@mui/icons-material';
-import { getAllCategories, getParentCategories, getCategoryMappings, planningService, scenarioService, type Category, type CategoryMapping, type PlanningBudget, type Scenario } from '../../services';
+import { useUser } from '@stackframe/react';
+import { type Category, type CategoryMapping, type Scenario } from '../../services';
+import { getAllCategoryDataNeon } from '../../services/categoryService';
+import { getPlanningBudgetsNeon, savePlanningBudgetNeon, deletePlanningBudgetNeon } from '../../services/planningService';
+import { getScenariosNeon } from '../../services/scenarioService';
 import D3PieChart from '../D3PieChart/D3PieChart';
 import ScenarioManager from '../ScenarioManager/ScenarioManager';
 import './Planning.css';
@@ -56,6 +53,7 @@ interface ParentPlanningData {
 }
 
 const Planning = () => {
+  const user = useUser();
   const [categories, setCategories] = useState<Category[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
@@ -156,9 +154,6 @@ const Planning = () => {
           return newValues;
         });
       }
-      
-      // Auto-save the monthly amount
-      debouncedAutoSave(categoryId, monthlyAmount);
     }
   };
 
@@ -204,17 +199,22 @@ const Planning = () => {
 
   const loadInitialData = async () => {
     try {
+      if (!user) {
+        throw new Error('No authentication available');
+      }
+
+      const accessToken = (await user.getAuthJson()).accessToken;
+      
       setLoading(true);
-      const [fetchedCategories, fetchedParents, fetchedMappings, fetchedScenarios] = await Promise.all([
-        getAllCategories(),
-        getParentCategories(),
-        getCategoryMappings(),
-        scenarioService.getScenarios()
+      // Use combined function to fetch all category data in a single query
+      const [categoryData, fetchedScenarios] = await Promise.all([
+        getAllCategoryDataNeon(accessToken!),
+        getScenariosNeon(accessToken!)
       ]);
       
-      setCategories(fetchedCategories);
-      setParentCategories(fetchedParents);
-      setCategoryMappings(fetchedMappings);
+      setCategories(categoryData.allCategories);
+      setParentCategories(categoryData.parentCategories);
+      setCategoryMappings(categoryData.categoryMappings);
       setScenarios(fetchedScenarios);
       
       // Get last selected scenario from localStorage or default to first scenario
@@ -222,7 +222,7 @@ const Planning = () => {
       let targetScenario = null;
       
       if (lastSelectedScenarioId && fetchedScenarios.length > 0) {
-        targetScenario = fetchedScenarios.find(s => s.scenarioId === parseInt(lastSelectedScenarioId));
+        targetScenario = fetchedScenarios.find((s: Scenario) => s.scenarioId === parseInt(lastSelectedScenarioId));
       }
       
       // Fallback to first scenario if no saved scenario or scenario not found
@@ -243,10 +243,11 @@ const Planning = () => {
   };
 
   const loadPlanningData = async () => {
-    if (!currentScenario) return;
+    if (!currentScenario || !user) return;
     
     try {
-      const planningBudgets = await planningService.getPlanningBudgets(currentScenario.scenarioId, currentYear);
+      const accessToken = (await user.getAuthJson()).accessToken;
+      const planningBudgets = await getPlanningBudgetsNeon(accessToken!, currentScenario.scenarioId, currentYear);
       
       // Initialize planning data with saved values or empty values
       const initialData: PlanningData = {};
@@ -287,62 +288,66 @@ const Planning = () => {
     await loadInitialData();
   };
 
-  // Auto-save function with debounce
-  const autoSave = React.useCallback(async (categoryId: number, monthlyAmount: number) => {
-    if (!currentScenario) return;
+  // Manual save function that saves all changed budgets
+  const handleSaveAll = React.useCallback(async () => {
+    if (!currentScenario || !user) return;
     
     try {
-      setSavingStates(prev => new Set(prev).add(categoryId));
+      const accessToken = (await user.getAuthJson()).accessToken;
       
-      // Convert monthly amount to yearly for storage
-      const yearlyAmount = monthlyAmount * 12;
+      // Collect all budgets to save (both parent and child categories)
+      const budgetsToSave: Array<{ categoryId: number; monthlyAmount: number }> = [];
       
-      if (yearlyAmount > 0) {
-        await planningService.savePlanningBudget({
-          categoryId,
-          scenarioId: currentScenario.scenarioId,
-          year: currentYear,
-          plannedAmount: yearlyAmount
-        });
-      } else {
-        // Delete if amount is 0
-        await planningService.deletePlanningBudget(categoryId, currentScenario.scenarioId, currentYear);
-      }
-    } catch (err) {
-      console.error('Error auto-saving:', err);
-      setError('Failed to save planning data');
-    } finally {
-      setSavingStates(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(categoryId);
-        return newSet;
-      });
-    }
-  }, [currentScenario, currentYear]);
-
-  // Debounced auto-save
-  const debouncedAutoSave = React.useCallback(
-    React.useMemo(() => {
-      const timeouts = new Map<number, NodeJS.Timeout>();
-      
-      return (categoryId: number, monthlyAmount: number) => {
-        // Clear existing timeout for this category
-        const existingTimeout = timeouts.get(categoryId);
-        if (existingTimeout) {
-          clearTimeout(existingTimeout);
+      // Add parent categories
+      Object.entries(parentPlanningData).forEach(([categoryId, data]) => {
+        if (data.plannedAmount > 0 || data.plannedAmount < 0) {
+          budgetsToSave.push({
+            categoryId: parseInt(categoryId),
+            monthlyAmount: data.plannedAmount
+          });
         }
-        
-        // Set new timeout
-        const newTimeout = setTimeout(() => {
-          autoSave(categoryId, monthlyAmount);
-          timeouts.delete(categoryId);
-        }, 1000); // 1 second delay
-        
-        timeouts.set(categoryId, newTimeout);
-      };
-    }, [currentYear, currentScenario]),
-    [currentYear, currentScenario, autoSave]
-  );
+      });
+      
+      // Add child categories
+      Object.entries(planningData).forEach(([categoryId, data]) => {
+        if (data.plannedAmount > 0 || data.plannedAmount < 0) {
+          budgetsToSave.push({
+            categoryId: parseInt(categoryId),
+            monthlyAmount: data.plannedAmount
+          });
+        }
+      });
+      
+      // Save all budgets
+      setSavingStates(new Set(budgetsToSave.map(b => b.categoryId)));
+      
+      for (const budget of budgetsToSave) {
+        const yearlyAmount = budget.monthlyAmount * 12;
+        try {
+          if (yearlyAmount !== 0) {
+            await savePlanningBudgetNeon(accessToken!, {
+              categoryId: budget.categoryId,
+              scenarioId: currentScenario.scenarioId,
+              year: currentYear,
+              plannedAmount: yearlyAmount
+            });
+          } else {
+            // Delete if amount is 0
+            await deletePlanningBudgetNeon(accessToken!, budget.categoryId, currentScenario.scenarioId, currentYear);
+          }
+        } catch (err) {
+          console.error(`Error saving budget for category ${budget.categoryId}:`, err);
+        }
+      }
+      
+      setSuccessMessage('Budget saved successfully!');
+      setSavingStates(new Set());
+    } catch (err) {
+      console.error('Error saving budgets:', err);
+      setError('Failed to save planning data');
+      setSavingStates(new Set());
+    }
+  }, [currentScenario, user, currentYear, planningData, parentPlanningData]);
 
   const handleAmountChange = (categoryId: number, value: string) => {
     // Store the raw input value for display
@@ -377,9 +382,6 @@ const Planning = () => {
         return newInputs;
       });
     }
-    
-    // Auto-save the monthly amount
-    debouncedAutoSave(categoryId, monthlyAmount);
   };
 
   const handleParentAmountChange = (parentId: number, value: string) => {
@@ -421,8 +423,6 @@ const Planning = () => {
             delete newInputs[mapping.categoryId];
             return newInputs;
           });
-          // Auto-save the cleared amounts
-          debouncedAutoSave(mapping.categoryId, 0);
         });
         return newData;
       });
@@ -435,9 +435,6 @@ const Planning = () => {
         plannedAmount: monthlyAmount
       }
     }));
-    
-    // Auto-save the monthly amount
-    debouncedAutoSave(parentId, monthlyAmount);
   };
 
   const toggleParentExpanded = (parentId: number) => {
@@ -538,9 +535,10 @@ const Planning = () => {
   };
 
   const handleClearAll = async () => {
-    if (!currentScenario) return;
+    if (!currentScenario || !user) return;
     
     try {
+      const accessToken = (await user.getAuthJson()).accessToken;
       setLoading(true);
       
       // Clear all budgets from database
@@ -551,7 +549,7 @@ const Planning = () => {
       
       await Promise.all(
         allCategoryIds.map(categoryId => 
-          planningService.deletePlanningBudget(categoryId, currentScenario.scenarioId, currentYear)
+          deletePlanningBudgetNeon(accessToken!, categoryId, currentScenario.scenarioId, currentYear)
         )
       );
       
@@ -593,8 +591,11 @@ const Planning = () => {
   };
 
   const handleScenariosUpdated = async () => {
+    if (!user) return;
+    
     try {
-      const updatedScenarios = await scenarioService.getScenarios();
+      const accessToken = (await user.getAuthJson()).accessToken;
+      const updatedScenarios = await getScenariosNeon(accessToken!);
       setScenarios(updatedScenarios);
       
       // Update current scenario if it was modified
@@ -1105,6 +1106,19 @@ const Planning = () => {
                 </Button>
               </Box>
             )}
+            
+            {/* Create First Scenario Button */}
+            {scenarios.length === 0 && (
+              <Box sx={{ textAlign: 'center', mb: 3 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<SettingsIcon />}
+                  onClick={() => setShowScenarioManager(true)}
+                >
+                  Create Your First Scenario
+                </Button>
+              </Box>
+            )}
           </Box>
           
           {/* View Mode Toggle */}
@@ -1133,12 +1147,24 @@ const Planning = () => {
             >
               Yearly
             </Button>
+            <Button
+              variant="contained"
+              color="success"
+              size="small"
+              onClick={handleSaveAll}
+              sx={{ ml: 2 }}
+            >
+              Save Changes
+            </Button>
           </Box>
         </Box>
       </Box>
 
-      {/* Summary Card */}
-      <Card 
+      {/* Show budget editor only when there's an active scenario */}
+      {currentScenario ? (
+        <>
+          {/* Summary Card */}
+          <Card 
         sx={{ 
           mb: 2, 
           cursor: 'pointer',
@@ -1307,6 +1333,14 @@ const Planning = () => {
           </Button>
         </DialogActions>
       </Dialog>
+        </>
+      ) : (
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography variant="body1" color="text.secondary">
+            Create a scenario to start planning your budget
+          </Typography>
+        </Box>
+      )}
 
       {/* Scenario Manager */}
       <ScenarioManager

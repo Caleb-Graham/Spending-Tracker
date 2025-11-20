@@ -9,6 +9,8 @@
     "@mui/material": "^7.2.0",
     "@mui/x-date-pickers": "^8.9.0",
     "@nivo/sankey": "^0.99.0",
+    "@stackframe/react": "^2.8.51",
+    "@supabase/postgrest-js": "^2.81.0",
     "@types/react-router-dom": "^5.3.3",
     "d3-sankey": "^0.12.3",
     "d3-scale": "^4.0.2",
@@ -22,32 +24,13 @@
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.7.0",
-    "react-scripts": "5.0.1",
     "recharts": "^3.1.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
@@ -59,8 +42,12 @@
     "@types/d3-shape": "^3.1.7",
     "@types/d3-transition": "^3.0.9",
     "@types/jest": "^30.0.0",
+    "@types/node": "^22.10.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "typescript": "^5.8.3"
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.8.3",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
   }
 }

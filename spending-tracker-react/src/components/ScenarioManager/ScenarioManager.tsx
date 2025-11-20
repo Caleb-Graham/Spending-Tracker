@@ -24,7 +24,9 @@ import {
   Delete as DeleteIcon,
   FileCopy as CopyIcon
 } from '@mui/icons-material';
-import { scenarioService, type Scenario, type CreateScenarioRequest, type DuplicateScenarioRequest } from '../../services';
+import { useUser } from '@stackframe/react';
+import { type Scenario, type CreateScenarioRequest, type DuplicateScenarioRequest } from '../../services';
+import { createScenarioNeon, updateScenarioNeon, deleteScenarioNeon, duplicateScenarioNeon } from '../../services/scenarioService';
 
 interface ScenarioManagerProps {
   open: boolean;
@@ -43,6 +45,7 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
   onScenarioChange,
   onScenariosUpdated
 }) => {
+  const user = useUser();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
@@ -58,14 +61,20 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
+    if (!user) {
+      setError('No authentication available');
+      return;
+    }
+
     try {
+      const accessToken = (await user.getAuthJson()).accessToken;
       setLoading(true);
       const request: CreateScenarioRequest = {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined
       };
       
-      await scenarioService.createScenario(request);
+      await createScenarioNeon(accessToken!, request);
       setSuccessMessage('Scenario created successfully!');
       setCreateDialogOpen(false);
       setFormData({ name: '', description: '' });
@@ -83,9 +92,15 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
+    if (!user) {
+      setError('No authentication available');
+      return;
+    }
+
     try {
+      const accessToken = (await user.getAuthJson()).accessToken;
       setLoading(true);
-      await scenarioService.updateScenario(selectedScenario.scenarioId, {
+      await updateScenarioNeon(accessToken!, selectedScenario.scenarioId, {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined
       });
@@ -107,14 +122,20 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
+    if (!user) {
+      setError('No authentication available');
+      return;
+    }
+
     try {
+      const accessToken = (await user.getAuthJson()).accessToken;
       setLoading(true);
       const request: DuplicateScenarioRequest = {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined
       };
       
-      await scenarioService.duplicateScenario(selectedScenario.scenarioId, request);
+      await duplicateScenarioNeon(accessToken!, selectedScenario.scenarioId, request);
       setSuccessMessage('Scenario duplicated successfully!');
       setDuplicateDialogOpen(false);
       setSelectedScenario(null);
@@ -132,9 +153,15 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
+    if (!user) {
+      setError('No authentication available');
+      return;
+    }
+
     try {
+      const accessToken = (await user.getAuthJson()).accessToken;
       setLoading(true);
-      await scenarioService.deleteScenario(scenario.scenarioId);
+      await deleteScenarioNeon(accessToken!, scenario.scenarioId);
       setSuccessMessage('Scenario deleted successfully!');
       onScenariosUpdated();
     } catch (err) {
