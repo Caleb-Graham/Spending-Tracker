@@ -870,7 +870,15 @@ const Summary = () => {
           ) : (
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <D3PieChart 
-                data={categorySummary} 
+                data={groupByParent(viewMode === 'expenses' ? detailedCategorySummary : detailedCategorySummary.filter((cat: any) => {
+                  const category = allCategories.find(c => c.categoryId === cat.categoryId);
+                  return category?.type === 'income';
+                })).map((parent: any) => ({
+                  categoryId: parent.categoryId,
+                  categoryName: parent.categoryName,
+                  amount: parent.amount,
+                  percentage: parent.percentage
+                }))} 
                 width={800} 
                 height={700} 
               />
