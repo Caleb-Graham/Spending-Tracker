@@ -116,7 +116,7 @@ export const getNetWorthDetailNeon = async (
       `
       NetWorthId,
       Value,
-      NetWorthAccounts(AccountId, Name, Category, IsAsset)
+      NetWorthAccounts(AccountId, Name, IsAsset, NetWorthCategories(Name))
     `
     )
     .eq("SnapshotId", snapshotId);
@@ -127,13 +127,18 @@ export const getNetWorthDetailNeon = async (
     );
   }
 
-  const assets = (netWorthData || []).map((row: any) => ({
-    accountId: row.NetWorthAccounts.AccountId,
-    category: row.NetWorthAccounts.Category,
-    name: row.NetWorthAccounts.Name,
-    value: parseFloat(row.Value),
-    isAsset: row.NetWorthAccounts.IsAsset,
-  }));
+  const assets = (netWorthData || []).map((row: any) => {
+    const account = row.NetWorthAccounts;
+    const netWorthCategory = account.NetWorthCategories;
+    const categoryName = netWorthCategory?.Name || "Uncategorized";
+    return {
+      accountId: account.AccountId,
+      category: categoryName,
+      name: account.Name,
+      value: parseFloat(row.Value),
+      isAsset: account.IsAsset,
+    };
+  });
 
   const totalValue = assets.reduce((sum, asset) => sum + asset.value, 0);
 
@@ -164,13 +169,13 @@ export const getNetWorthCategorySummaryNeon = async (
     throw new Error("Snapshot not found");
   }
 
-  // Fetch net worth entries with account details
+  // Fetch net worth entries with account and category details
   const { data: netWorthData, error: netWorthError } = await pg
     .from("NetWorth")
     .select(
       `
       Value,
-      NetWorthAccounts(AccountId, Name, Category, IsAsset)
+      NetWorthAccounts(AccountId, Name, IsAsset, NetWorthCategories(CategoryId, Name))
     `
     )
     .eq("SnapshotId", snapshotId);
@@ -188,12 +193,14 @@ export const getNetWorthCategorySummaryNeon = async (
 
   (netWorthData || []).forEach((row: any) => {
     const account = row.NetWorthAccounts;
+    const netWorthCategory = account.NetWorthCategories;
+    const categoryName = netWorthCategory?.Name || "Uncategorized";
     const value = parseFloat(row.Value);
-    const key = `${account.Category}-${account.IsAsset}`;
+    const key = `${categoryName}-${account.IsAsset}`;
 
     if (!categories.has(key)) {
       categories.set(key, {
-        category: account.Category,
+        category: categoryName,
         isAsset: account.IsAsset,
         totalValue: 0,
         items: [],
@@ -203,7 +210,7 @@ export const getNetWorthCategorySummaryNeon = async (
     const category = categories.get(key)!;
     category.items.push({
       accountId: account.AccountId,
-      category: account.Category,
+      category: categoryName,
       name: account.Name,
       value,
       isAsset: account.IsAsset,
@@ -405,8 +412,7 @@ export const getAllNetWorthAccountTemplatesNeon = async (
 
   const { data, error } = await pg
     .from("NetWorthAccounts")
-    .select("Name, Category, IsAsset")
-    .order("Category")
+    .select("Name, IsAsset, NetWorthCategories(Name)")
     .order("Name");
 
   if (error) {
@@ -415,7 +421,7 @@ export const getAllNetWorthAccountTemplatesNeon = async (
 
   return (data || []).map((row: any) => ({
     name: row.Name,
-    category: row.Category,
+    category: row.NetWorthCategories?.Name || "Uncategorized",
     isAsset: row.IsAsset,
   }));
 };
@@ -423,6 +429,7 @@ export const getAllNetWorthAccountTemplatesNeon = async (
 // Get all net worth accounts with IDs
 export interface NetWorthAccountWithId extends CreateNetWorthAccountRequest {
   accountId: number;
+  isArchived?: boolean;
 }
 
 export const getAllNetWorthAccountsNeon = async (
@@ -430,11 +437,12 @@ export const getAllNetWorthAccountsNeon = async (
 ): Promise<NetWorthAccountWithId[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
-  const { data, error } = await pg
+  let query = pg
     .from("NetWorthAccounts")
-    .select("AccountId, Name, Category, IsAsset")
-    .order("Category")
+    .select("AccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)")
     .order("Name");
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message || "Failed to fetch accounts");
@@ -443,8 +451,9 @@ export const getAllNetWorthAccountsNeon = async (
   return (data || []).map((row: any) => ({
     accountId: row.AccountId,
     name: row.Name,
-    category: row.Category,
+    category: row.NetWorthCategories?.Name || "Uncategorized",
     isAsset: row.IsAsset,
+    isArchived: row.IsArchived || false,
   }));
 };
 
@@ -498,22 +507,44 @@ export const updateNetWorthAccountNeon = async (
     .from("NetWorthAccounts")
     .update(updateData)
     .eq("AccountId", accountId)
-    .select("AccountId, Name, Category, IsAsset")
+    .select("AccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)")
     .single();
 
   if (error) {
     throw new Error(error.message || "Failed to update account");
   }
 
+  const netWorthCategory = Array.isArray(data.NetWorthCategories)
+    ? data.NetWorthCategories[0]
+    : data.NetWorthCategories;
+
   return {
     accountId: data.AccountId,
     name: data.Name,
-    category: data.Category,
+    category: netWorthCategory?.Name || "Uncategorized",
     isAsset: data.IsAsset,
+    isArchived: data.IsArchived || false,
   };
 };
 
-// Delete a net worth account
+// Archive a net worth account (soft delete - hides from view but preserves data)
+export const archiveNetWorthAccountNeon = async (
+  accessToken: string,
+  accountId: number
+): Promise<void> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { error } = await pg
+    .from("NetWorthAccounts")
+    .update({ IsArchived: true })
+    .eq("AccountId", accountId);
+
+  if (error) {
+    throw new Error(error.message || "Failed to archive account");
+  }
+};
+
+// Delete a net worth account (hard delete - removes all data)
 export const deleteNetWorthAccountNeon = async (
   accessToken: string,
   accountId: number
@@ -570,4 +601,151 @@ export const getAccountValuesOverTimeNeon = async (
     date: row.NetWorthSnapshots.Date,
     value: parseFloat(row.Value),
   }));
+};
+
+// ========== NetWorth Categories CRUD Operations ==========
+
+export interface NetWorthCategoryWithId {
+  categoryId: number;
+  name: string;
+  isAsset: boolean;
+  sortOrder: number;
+  notes?: string;
+  isArchived: boolean;
+}
+
+export interface CreateNetWorthCategoryRequest {
+  name: string;
+  isAsset: boolean;
+  sortOrder?: number;
+  notes?: string;
+}
+
+// Get all NetWorth categories
+export const getAllNetWorthCategoriesNeon = async (
+  accessToken: string
+): Promise<NetWorthCategoryWithId[]> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { data, error } = await pg
+    .from("NetWorthCategories")
+    .select("CategoryId, Name, IsAsset, SortOrder, Notes")
+    .order("SortOrder", { ascending: true })
+    .order("Name", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || "Failed to fetch categories");
+  }
+
+  return (data || []).map((row: any) => ({
+    categoryId: row.CategoryId,
+    name: row.Name,
+    isAsset: row.IsAsset,
+    sortOrder: row.SortOrder || 0,
+    notes: row.Notes || "",
+    isArchived: false,
+  }));
+};
+
+// Create a new NetWorth category
+export const createNetWorthCategoryNeon = async (
+  accessToken: string,
+  request: CreateNetWorthCategoryRequest
+): Promise<NetWorthCategoryWithId> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { data, error } = await pg
+    .from("NetWorthCategories")
+    .insert([
+      {
+        Name: request.name,
+        IsAsset: request.isAsset,
+        SortOrder: request.sortOrder ?? 0,
+        Notes: request.notes || "",
+      },
+    ])
+    .select("CategoryId, Name, IsAsset, SortOrder, Notes")
+    .single();
+
+  if (error) {
+    throw new Error(error.message || "Failed to create category");
+  }
+
+  return {
+    categoryId: data.CategoryId,
+    name: data.Name,
+    isAsset: data.IsAsset,
+    sortOrder: data.SortOrder || 0,
+    notes: data.Notes || "",
+    isArchived: false,
+  };
+};
+
+// Update a NetWorth category
+export const updateNetWorthCategoryNeon = async (
+  accessToken: string,
+  categoryId: number,
+  request: Partial<CreateNetWorthCategoryRequest>
+): Promise<NetWorthCategoryWithId> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const updateData: any = {};
+  if (request.name) updateData.Name = request.name;
+  if (request.isAsset !== undefined) updateData.IsAsset = request.isAsset;
+  if (request.sortOrder !== undefined) updateData.SortOrder = request.sortOrder;
+  if (request.notes !== undefined) updateData.Notes = request.notes;
+
+  const { data, error } = await pg
+    .from("NetWorthCategories")
+    .update(updateData)
+    .eq("CategoryId", categoryId)
+    .select("CategoryId, Name, IsAsset, SortOrder, Notes")
+    .single();
+
+  if (error) {
+    throw new Error(error.message || "Failed to update category");
+  }
+
+  return {
+    categoryId: data.CategoryId,
+    name: data.Name,
+    isAsset: data.IsAsset,
+    sortOrder: data.SortOrder || 0,
+    notes: data.Notes || "",
+    isArchived: false,
+  };
+};
+
+// Archive a NetWorth category (soft delete)
+export const archiveNetWorthCategoryNeon = async (
+  accessToken: string,
+  categoryId: number
+): Promise<void> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { error } = await pg
+    .from("NetWorthCategories")
+    .update({ IsArchived: true })
+    .eq("CategoryId", categoryId);
+
+  if (error) {
+    throw new Error(error.message || "Failed to archive category");
+  }
+};
+
+// Delete a NetWorth category (hard delete)
+export const deleteNetWorthCategoryNeon = async (
+  accessToken: string,
+  categoryId: number
+): Promise<void> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { error } = await pg
+    .from("NetWorthCategories")
+    .delete()
+    .eq("CategoryId", categoryId);
+
+  if (error) {
+    throw new Error(error.message || "Failed to delete category");
+  }
 };

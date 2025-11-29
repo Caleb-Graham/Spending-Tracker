@@ -46,6 +46,7 @@ import {
 import { useDateRange } from '../../hooks/useDateRange';
 import DateRangeSelector from '../shared/DateRangeSelector';
 import AccountManager from './AccountManager';
+import CategoryManager from './CategoryManager';
 import './NetWorth.css';
 
 const NetWorth: React.FC = () => {
@@ -63,6 +64,7 @@ const NetWorth: React.FC = () => {
   const [accountTimeSeries, setAccountTimeSeries] = useState<any[]>([]);
   const [isLoadingAccountData, setIsLoadingAccountData] = useState(false);
   const [accountManagerOpen, setAccountManagerOpen] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   
   // Add snapshot modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -572,6 +574,14 @@ const NetWorth: React.FC = () => {
           <Button
             variant="outlined"
             startIcon={<SettingsIcon />}
+            onClick={() => setCategoryManagerOpen(true)}
+            size="small"
+          >
+            Manage Categories
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<SettingsIcon />}
             onClick={() => setAccountManagerOpen(true)}
             size="small"
           >
@@ -1041,6 +1051,13 @@ const NetWorth: React.FC = () => {
         open={accountManagerOpen} 
         onClose={handleAccountManagerClose}
         onAccountsChanged={handleAccountsChanged}
+      />
+
+      {/* Category Manager Modal */}
+      <CategoryManager 
+        open={categoryManagerOpen} 
+        onClose={() => setCategoryManagerOpen(false)}
+        onCategoriesChanged={loadNetWorthSnapshots}
       />
     </div>
   );

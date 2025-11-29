@@ -22,11 +22,12 @@ import {
   Typography,
   Alert
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Archive as ArchiveIcon, Add as AddIcon } from '@mui/icons-material';
 import {
   getAllNetWorthAccountsNeon,
   createNetWorthAccountNeon,
   updateNetWorthAccountNeon,
+  archiveNetWorthAccountNeon,
   deleteNetWorthAccountNeon,
   type NetWorthAccountWithId,
   type CreateNetWorthAccountRequest
@@ -209,6 +210,37 @@ const AccountManager: React.FC<AccountManagerProps> = ({ open, onClose, onAccoun
     }
   };
 
+  const handleArchiveAccount = async (account: NetWorthAccountWithId) => {
+    if (!window.confirm(`Archive "${account.name}"? It will be hidden from view but the data will be preserved.`)) {
+      return;
+    }
+
+    try {
+      if (!user) {
+        setError('User not authenticated');
+        return;
+      }
+
+      setIsSaving(true);
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        setError('No access token available');
+        return;
+      }
+
+      await archiveNetWorthAccountNeon(accessToken, account.accountId);
+      setAccounts(accounts.filter(a => a.accountId !== account.accountId));
+      setError(null);
+      onAccountsChanged?.();
+    } catch (err: any) {
+      setError(err.message || 'Failed to archive account');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Group accounts by category
   const accountsByCategory = React.useMemo(() => {
     const grouped = new Map<string, NetWorthAccountWithId[]>();
@@ -291,6 +323,15 @@ const AccountManager: React.FC<AccountManagerProps> = ({ open, onClose, onAccoun
                               title="Edit account"
                             >
                               <EditIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleArchiveAccount(account)}
+                              disabled={isSaving}
+                              title="Archive account"
+                              sx={{ color: 'warning.main' }}
+                            >
+                              <ArchiveIcon fontSize="small" />
                             </IconButton>
                             <IconButton
                               size="small"
