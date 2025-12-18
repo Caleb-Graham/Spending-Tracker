@@ -298,20 +298,13 @@ export const createTransactionNeon = async (
 
   const { data, error } = await pg
     .from("Transactions")
-    .insert([
-      {
-        Date: transaction.date,
-        Note: transaction.note,
-        Amount: finalAmount,
-        CategoryId: transaction.categoryId || null,
-      },
-    ])
-    .select(
-      `
-      *,
-      Categories(CategoryId, Name, Type)
-    `
-    );
+    .insert({
+      Date: transaction.date,
+      Note: transaction.note,
+      Amount: finalAmount,
+      CategoryId: transaction.categoryId || null,
+    })
+    .select();
 
   if (error) {
     throw new Error(error.message || "Failed to create transaction");
@@ -322,6 +315,24 @@ export const createTransactionNeon = async (
   }
 
   const row = data[0];
+
+  let category = null;
+  if (row.CategoryId) {
+    const { data: categoryData } = await pg
+      .from("Categories")
+      .select("CategoryId, Name, Type")
+      .eq("CategoryId", row.CategoryId)
+      .single();
+
+    if (categoryData) {
+      category = {
+        categoryId: categoryData.CategoryId,
+        name: categoryData.Name,
+        type: categoryData.Type,
+      };
+    }
+  }
+
   return {
     transactionId: row.TransactionId,
     date: row.Date,
@@ -329,12 +340,6 @@ export const createTransactionNeon = async (
     amount: row.Amount,
     categoryId: row.CategoryId,
     isIncome: row.Amount > 0,
-    category: row.Categories
-      ? {
-          categoryId: row.Categories.CategoryId,
-          name: row.Categories.Name,
-          type: row.Categories.Type,
-        }
-      : null,
+    category,
   };
 };

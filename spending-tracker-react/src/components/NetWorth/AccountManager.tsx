@@ -22,12 +22,13 @@ import {
   Typography,
   Alert
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Archive as ArchiveIcon, Add as AddIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Archive as ArchiveIcon, Add as AddIcon, Unarchive as UnarchiveIcon } from '@mui/icons-material';
 import {
   getAllNetWorthAccountsNeon,
   createNetWorthAccountNeon,
   updateNetWorthAccountNeon,
   archiveNetWorthAccountNeon,
+  unarchiveNetWorthAccountNeon,
   deleteNetWorthAccountNeon,
   type NetWorthAccountWithId,
   type CreateNetWorthAccountRequest
@@ -231,11 +232,42 @@ const AccountManager: React.FC<AccountManagerProps> = ({ open, onClose, onAccoun
       }
 
       await archiveNetWorthAccountNeon(accessToken, account.accountId);
-      setAccounts(accounts.filter(a => a.accountId !== account.accountId));
+      await loadAccounts();
       setError(null);
       onAccountsChanged?.();
     } catch (err: any) {
       setError(err.message || 'Failed to archive account');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUnarchiveAccount = async (account: NetWorthAccountWithId) => {
+    if (!window.confirm(`Unarchive "${account.name}"?`)) {
+      return;
+    }
+
+    try {
+      if (!user) {
+        setError('User not authenticated');
+        return;
+      }
+
+      setIsSaving(true);
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        setError('No access token available');
+        return;
+      }
+
+      await unarchiveNetWorthAccountNeon(accessToken, account.accountId);
+      await loadAccounts();
+      setError(null);
+      onAccountsChanged?.();
+    } catch (err: any) {
+      setError(err.message || 'Failed to unarchive account');
     } finally {
       setIsSaving(false);
     }
@@ -305,8 +337,22 @@ const AccountManager: React.FC<AccountManagerProps> = ({ open, onClose, onAccoun
                         </TableCell>
                       </TableRow>,
                       ...categoryAccounts.map((account) => (
-                        <TableRow key={account.accountId} hover>
-                          <TableCell>{account.name}</TableCell>
+                        <TableRow 
+                          key={account.accountId} 
+                          hover
+                          sx={{ 
+                            opacity: account.isArchived ? 0.6 : 1,
+                            backgroundColor: account.isArchived ? '#f5f5f5' : 'inherit'
+                          }}
+                        >
+                          <TableCell>
+                            {account.name}
+                            {account.isArchived && (
+                              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', marginTop: '4px' }}>
+                                (Archived)
+                              </Typography>
+                            )}
+                          </TableCell>
                           <TableCell>{account.category}</TableCell>
                           <TableCell>
                             {account.isAsset ? (
@@ -316,23 +362,37 @@ const AccountManager: React.FC<AccountManagerProps> = ({ open, onClose, onAccoun
                             )}
                           </TableCell>
                           <TableCell align="right">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenEditModal(account)}
-                              disabled={isSaving}
-                              title="Edit account"
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleArchiveAccount(account)}
-                              disabled={isSaving}
-                              title="Archive account"
-                              sx={{ color: 'warning.main' }}
-                            >
-                              <ArchiveIcon fontSize="small" />
-                            </IconButton>
+                            {!account.isArchived && (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenEditModal(account)}
+                                disabled={isSaving}
+                                title="Edit account"
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                            {account.isArchived ? (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleUnarchiveAccount(account)}
+                                disabled={isSaving}
+                                title="Unarchive account"
+                                sx={{ color: 'success.main' }}
+                              >
+                                <UnarchiveIcon fontSize="small" />
+                              </IconButton>
+                            ) : (
+                              <IconButton
+                                size="small"
+                                onClick={() => handleArchiveAccount(account)}
+                                disabled={isSaving}
+                                title="Archive account"
+                                sx={{ color: 'warning.main' }}
+                              >
+                                <ArchiveIcon fontSize="small" />
+                              </IconButton>
+                            )}
                             <IconButton
                               size="small"
                               onClick={() => handleDeleteAccount(account)}

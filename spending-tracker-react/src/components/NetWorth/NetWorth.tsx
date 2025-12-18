@@ -56,7 +56,7 @@ const NetWorth: React.FC = () => {
   const [categorySummary, setCategorySummary] = useState<NetWorthCategorySummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [accountTemplates, setAccountTemplates] = useState<CreateNetWorthAssetRequest[]>([]);
+  const [accountTemplates, setAccountTemplates] = useState<(CreateNetWorthAssetRequest & { isArchived?: boolean })[]>([]);
   
   // Account filter/sort state
   const [allAccounts, setAllAccounts] = useState<NetWorthAccountWithId[]>([]);
@@ -212,8 +212,11 @@ const NetWorth: React.FC = () => {
       const templates = await getAllNetWorthAccountTemplatesNeon(accessToken);
       
       if (templates.length > 0) {
+        // Filter out archived accounts
+        const activeTemplates = templates.filter(t => !t.isArchived);
+        
         // Convert to CreateNetWorthAssetRequest format with value: 0
-        const templatesWithValues = templates.map(t => ({
+        const templatesWithValues = activeTemplates.map(t => ({
           ...t,
           value: 0
         }));
@@ -441,8 +444,8 @@ const NetWorth: React.FC = () => {
       setNewSnapshotDate(new Date().toISOString().split('T')[0]);
       setNewSnapshotNotes('');
       setInputValues({});
-      // Reset to account templates with zero values
-      setNewSnapshotAssets(accountTemplates.map(template => ({ ...template, value: 0 })));
+      // Reset to account templates with zero values, filtering out archived accounts
+      setNewSnapshotAssets(accountTemplates.filter(t => !t.isArchived).map(template => ({ ...template, value: 0 })));
     } catch (error) {
       console.error('Failed to save snapshot:', error);
       // You might want to show an error message to the user here
@@ -457,8 +460,8 @@ const NetWorth: React.FC = () => {
     setNewSnapshotDate(new Date().toISOString().split('T')[0]);
     setNewSnapshotNotes('');
     setInputValues({});
-    // Reset to account templates with zero values
-    setNewSnapshotAssets(accountTemplates.map(template => ({ ...template, value: 0 })));
+    // Reset to account templates with zero values, filtering out archived accounts
+    setNewSnapshotAssets(accountTemplates.filter(t => !t.isArchived).map(template => ({ ...template, value: 0 })));
   };
 
   const handleEditSnapshot = async (snapshot: NetWorthSnapshot) => {
@@ -600,8 +603,9 @@ const NetWorth: React.FC = () => {
                   }
                 }
               }
-              // Reset the form with all account templates set to 0
-              setNewSnapshotAssets(accountTemplates.map(template => ({ ...template, value: 0 })));
+              // Reset the form with all account templates set to 0, filtering out archived accounts
+              const activeTemplates = accountTemplates.filter(t => !t.isArchived);
+              setNewSnapshotAssets(activeTemplates.map(template => ({ ...template, value: 0 })));
               setInputValues({});
               setIsAddModalOpen(true);
             }}
@@ -611,53 +615,6 @@ const NetWorth: React.FC = () => {
           </Button>
         </div>
       </div>
-
-      {/* Account Filter Section */}
-      {allAccounts.length > 0 && (
-        <Box style={{ marginTop: '24px' }}>
-          <Paper style={{ padding: '16px' }}>
-            <FormControl sx={{ minWidth: 200 }} size="small">
-              <InputLabel>Filter by Account</InputLabel>
-              <Select
-                label="Filter by Account"
-                value={selectedAccount?.accountId || 0}
-                onChange={(e) => {
-                  if (e.target.value === 0 || !e.target.value) {
-                    setSelectedAccount(null);
-                    setAccountTimeSeries([]);
-                  } else {
-                    handleAccountSelect(e.target.value as unknown as number);
-                  }
-                }}
-              >
-                <MenuItem value={0}>All Accounts (Show Net Worth)</MenuItem>
-                {Array.from(
-                  allAccounts.reduce((acc, account) => {
-                    if (!acc.has(account.category)) {
-                      acc.set(account.category, []);
-                    }
-                    acc.get(account.category)!.push(account);
-                    return acc;
-                  }, new Map<string, NetWorthAccountWithId[]>())
-                  .entries()
-                )
-                  .sort(([catA], [catB]) => catA.localeCompare(catB))
-                  .map(([category, categoryAccounts]) => [
-                    <MenuItem key={`category-${category}`} disabled sx={{ fontWeight: 'bold' }}>
-                      {category}
-                    </MenuItem>,
-                    ...categoryAccounts.map((account) => (
-                      <MenuItem key={account.accountId} value={account.accountId} sx={{ pl: 4 }}>
-                        {account.name} {account.isAsset ? '(Asset)' : '(Liability)'}
-                      </MenuItem>
-                    ))
-                  ])
-                  .flat()}
-              </Select>
-            </FormControl>
-          </Paper>
-        </Box>
-      )}
 
       {/* Account Time Series Chart */}
       {selectedAccount && accountTimeSeries.length > 0 && (

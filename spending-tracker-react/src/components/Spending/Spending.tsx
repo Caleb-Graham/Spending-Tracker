@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '@stackframe/react';
-import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, type Transaction, type Category } from '../../services';
+import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
 import {
   Table,
   TableBody,
@@ -10,6 +10,7 @@ import {
   TableRow,
   Paper,
   Button,
+  IconButton,
   CircularProgress,
   TablePagination,
   Box,
@@ -28,7 +29,7 @@ import {
   DialogActions,
   Snackbar
 } from '@mui/material';
-import { Edit as EditIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -54,6 +55,7 @@ const Spending = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showFutureOnly, setShowFutureOnly] = useState<boolean>(false);
 
   // Sorting states
   const [sortField, setSortField] = useState<SortField>('date');
@@ -78,7 +80,10 @@ const Spending = () => {
     note: '',
     amount: '',
     categoryId: '',
-    isIncome: false
+    isIncome: false,
+    isRecurring: false,
+    recurringFrequency: 'MONTHLY' as RecurringFrequency,
+    recurringInterval: 1
   });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -146,11 +151,20 @@ const Spending = () => {
     if (startDate && transactionDate < startDate) return false;
     if (endDate && transactionDate > endDate) return false;
 
+    // Exclude future transactions by default (unless toggle is enabled)
+    if (!showFutureOnly) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const txDate = new Date(transaction.date);
+      txDate.setHours(0, 0, 0, 0);
+      if (txDate > today) return false;
+    }
+
     return true;
   });
 
   // Sort transactions based on current sort settings
-  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+  let sortedTransactions = [...filteredTransactions].sort((a, b) => {
     let aValue: any;
     let bValue: any;
 
@@ -209,7 +223,7 @@ const Spending = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [typeFilter, categoryFilter, searchTerm, startDate, endDate]);
+  }, [typeFilter, categoryFilter, searchTerm, startDate, endDate, showFutureOnly]);
 
   // Reset category filter when type filter changes (since available categories change)
   useEffect(() => {
@@ -247,6 +261,7 @@ const Spending = () => {
     setSearchTerm('');
     setStartDate(null);
     setEndDate(null);
+    setShowFutureOnly(false);
   };
 
   const getActiveFilterCount = () => {
@@ -255,6 +270,7 @@ const Spending = () => {
     if (categoryFilter !== 'all') count++;
     if (searchTerm) count++;
     if (startDate || endDate) count++;
+    if (showFutureOnly) count++;
     return count;
   };
 
@@ -319,6 +335,44 @@ const Spending = () => {
     setEditFormData({ date: '', note: '', amount: '', categoryId: '' });
   };
 
+  const handleDeleteClick = async (transaction: Transaction) => {
+    if (!window.confirm('Are you sure you want to delete this transaction?')) {
+      return;
+    }
+    
+    if (!user) {
+      setError('Please sign in to delete transactions');
+      return;
+    }
+
+    try {
+      const authJson = await user.getAuthJson();
+      const accessToken = authJson.accessToken;
+
+      if (!accessToken) {
+        throw new Error('No access token available');
+      }
+
+      const pg = PostgrestClientFactory.createClient(accessToken);
+      const { error: deleteError } = await pg
+        .from('Transactions')
+        .delete()
+        .eq('TransactionId', transaction.transactionId);
+
+      if (deleteError) {
+        throw new Error(deleteError.message || 'Failed to delete transaction');
+      }
+
+      // Remove the transaction from the local state
+      setTransactions(transactions.filter(t => t.transactionId !== transaction.transactionId));
+      setNotification({ message: 'Transaction deleted successfully', severity: 'success' });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setNotification({ message: 'Failed to delete transaction: ' + errorMessage, severity: 'error' });
+      console.error('Error deleting transaction:', error);
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!editingTransaction || !user) {
       return;
@@ -368,7 +422,10 @@ const Spending = () => {
       note: '',
       amount: '',
       categoryId: '',
-      isIncome: false
+      isIncome: false,
+      isRecurring: false,
+      recurringFrequency: 'MONTHLY' as RecurringFrequency,
+      recurringInterval: 1
     });
     setCreateDialogOpen(true);
   };
@@ -380,7 +437,10 @@ const Spending = () => {
       note: '',
       amount: '',
       categoryId: '',
-      isIncome: false
+      isIncome: false,
+      isRecurring: false,
+      recurringFrequency: 'MONTHLY' as RecurringFrequency,
+      recurringInterval: 1
     });
   };
 
@@ -409,6 +469,12 @@ const Spending = () => {
         return;
       }
 
+      if (createFormData.isRecurring && !createFormData.categoryId) {
+        setNotification({ message: 'Please select a category for recurring transactions', severity: 'error' });
+        return;
+      }
+
+      // Create the first transaction immediately
       await createTransactionNeon(
         {
           date: createFormData.date,
@@ -420,9 +486,31 @@ const Spending = () => {
         accessToken
       );
 
-      setNotification({ message: 'Transaction created successfully', severity: 'success' });
-      handleCreateClose();
+      if (createFormData.isRecurring) {
+        // Also create the recurring transaction record for the cron job
+        await createRecurringTransactionNeon(
+          {
+            amount: amount,
+            note: createFormData.note,
+            categoryId: parseInt(createFormData.categoryId),
+            frequency: createFormData.recurringFrequency,
+            interval: createFormData.recurringInterval,
+            startAt: createFormData.date,
+            isIncome: createFormData.isIncome
+          },
+          accessToken
+        );
+
+        setNotification({ 
+          message: `Created transaction and scheduled recurring ${createFormData.recurringFrequency.toLowerCase()} "${createFormData.note}"`, 
+          severity: 'success' 
+        });
+      } else {
+        setNotification({ message: 'Transaction created successfully', severity: 'success' });
+      }
+
       await loadTransactions();
+      handleCreateClose();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setNotification({ message: `Failed to create: ${errorMessage}`, severity: 'error' });
@@ -576,6 +664,20 @@ const Spending = () => {
                 Clear
               </Button>
             </Box>
+
+            {/* Future Transactions Toggle */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <input
+                type="checkbox"
+                id="showFuture"
+                checked={showFutureOnly}
+                onChange={(e) => setShowFutureOnly(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <label htmlFor="showFuture" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Show Future Transactions
+              </label>
+            </Box>
           </Box>
         </Paper>
 
@@ -667,15 +769,26 @@ const Spending = () => {
                       })}
                     </TableCell>
                     <TableCell>{transaction.isIncome ? 'INCOME' : 'EXPENSE'}</TableCell>
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        startIcon={<EditIcon />}
-                        onClick={() => handleEditClick(transaction)}
-                        variant="outlined"
-                      >
-                        Edit
-                      </Button>
+                    <TableCell align="right" sx={{ padding: '8px 4px' }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteClick(transaction)}
+                          color="error"
+                          title="Delete"
+                          sx={{ padding: '4px' }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditClick(transaction)}
+                          title="Edit"
+                          sx={{ padding: '4px' }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))
@@ -810,6 +923,60 @@ const Spending = () => {
                 ))}
               </Select>
             </FormControl>
+
+            {/* Recurring Transaction Section */}
+            <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+                Recurring Transaction
+              </Typography>
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Recurring</InputLabel>
+                <Select
+                  value={createFormData.isRecurring ? 'yes' : 'no'}
+                  label="Recurring"
+                  onChange={(e) => setCreateFormData({ ...createFormData, isRecurring: e.target.value === 'yes' })}
+                >
+                  <MenuItem value="no">No</MenuItem>
+                  <MenuItem value="yes">Yes</MenuItem>
+                </Select>
+              </FormControl>
+
+              {createFormData.isRecurring && (
+                <>
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>Frequency</InputLabel>
+                    <Select
+                      value={createFormData.recurringFrequency}
+                      label="Frequency"
+                      onChange={(e) => setCreateFormData({ ...createFormData, recurringFrequency: e.target.value as RecurringFrequency })}
+                    >
+                      <MenuItem value="DAILY">Daily</MenuItem>
+                      <MenuItem value="WEEKLY">Weekly</MenuItem>
+                      <MenuItem value="MONTHLY">Monthly</MenuItem>
+                      <MenuItem value="YEARLY">Yearly</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <TextField
+                    label="Repeat Every"
+                    type="number"
+                    value={createFormData.recurringInterval}
+                    onChange={(e) => setCreateFormData({ ...createFormData, recurringInterval: Math.max(1, parseInt(e.target.value) || 1) })}
+                    fullWidth
+                    inputProps={{ min: '1', max: '12' }}
+                    sx={{ mb: 2 }}
+                    helperText={`Repeat every ${createFormData.recurringInterval} ${createFormData.recurringFrequency.toLowerCase()}${createFormData.recurringInterval > 1 ? 's' : ''}`}
+                  />
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Starting {new Date(createFormData.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}, 
+                    this transaction will automatically repeat {createFormData.recurringFrequency.toLowerCase()}
+                    {createFormData.recurringInterval > 1 ? ` (every ${createFormData.recurringInterval})` : ''}.
+                    A cron job will create future transactions automatically.
+                  </Typography>
+                </>
+              )}
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCreateClose}>Cancel</Button>

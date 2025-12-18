@@ -407,12 +407,12 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
 // OPTIMIZED: Get all unique accounts from all snapshots in one query
 export const getAllNetWorthAccountTemplatesNeon = async (
   accessToken: string
-): Promise<CreateNetWorthAccountRequest[]> => {
+): Promise<(CreateNetWorthAccountRequest & { isArchived?: boolean })[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
   const { data, error } = await pg
     .from("NetWorthAccounts")
-    .select("Name, IsAsset, NetWorthCategories(Name)")
+    .select("Name, IsAsset, IsArchived, NetWorthCategories(Name)")
     .order("Name");
 
   if (error) {
@@ -423,6 +423,7 @@ export const getAllNetWorthAccountTemplatesNeon = async (
     name: row.Name,
     category: row.NetWorthCategories?.Name || "Uncategorized",
     isAsset: row.IsAsset,
+    isArchived: row.IsArchived || false,
   }));
 };
 
@@ -541,6 +542,23 @@ export const archiveNetWorthAccountNeon = async (
 
   if (error) {
     throw new Error(error.message || "Failed to archive account");
+  }
+};
+
+// Unarchive a net worth account
+export const unarchiveNetWorthAccountNeon = async (
+  accessToken: string,
+  accountId: number
+): Promise<void> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { error } = await pg
+    .from("NetWorthAccounts")
+    .update({ IsArchived: false })
+    .eq("AccountId", accountId);
+
+  if (error) {
+    throw new Error(error.message || "Failed to unarchive account");
   }
 };
 
