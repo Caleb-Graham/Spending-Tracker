@@ -68,7 +68,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
     // Add pie slices
     arcs.append("path")
       .attr("d", arcGenerator)
-      .attr("fill", (d, i) => color(i.toString()))
+      .attr("fill", (_, i) => color(i.toString()))
       .attr("stroke", "white")
       .attr("stroke-width", 2)
       .on("mouseover", function(event, d: any) {

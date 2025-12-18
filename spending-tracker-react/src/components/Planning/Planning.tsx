@@ -75,17 +75,17 @@ const Planning = () => {
 
   const currentYear = new Date().getFullYear();
 
-  // Helper function to convert between monthly and yearly amounts
-  const convertAmount = (amount: number, fromMode: 'monthly' | 'yearly' | 'weekly', toMode: 'monthly' | 'yearly' | 'weekly'): number => {
-    if (fromMode === toMode) return amount;
-    if (fromMode === 'monthly' && toMode === 'yearly') return amount * 12;
-    if (fromMode === 'yearly' && toMode === 'monthly') return amount / 12;
-    if (fromMode === 'monthly' && toMode === 'weekly') return amount / 4.33; // Average weeks per month
-    if (fromMode === 'weekly' && toMode === 'monthly') return amount * 4.33;
-    if (fromMode === 'weekly' && toMode === 'yearly') return amount * 52;
-    if (fromMode === 'yearly' && toMode === 'weekly') return amount / 52;
-    return amount;
-  };
+  // Not currently used but kept for future reference
+  // const convertAmount = (amount: number, fromMode: 'monthly' | 'yearly' | 'weekly', toMode: 'monthly' | 'yearly' | 'weekly'): number => {
+  //   if (fromMode === toMode) return amount;
+  //   if (fromMode === 'monthly' && toMode === 'yearly') return amount * 12;
+  //   if (fromMode === 'yearly' && toMode === 'monthly') return amount / 12;
+  //   if (fromMode === 'monthly' && toMode === 'weekly') return amount / 4.33; // Average weeks per month
+  //   if (fromMode === 'weekly' && toMode === 'monthly') return amount * 4.33;
+  //   if (fromMode === 'weekly' && toMode === 'yearly') return amount * 52;
+  //   if (fromMode === 'yearly' && toMode === 'weekly') return amount / 52;
+  //   return amount;
+  // };
 
   // Helper function to get display amount based on current view mode
   const getDisplayAmount = (monthlyAmount: number): number => {
@@ -168,8 +168,8 @@ const Planning = () => {
   };
 
   // Separate categories by type
-  const incomeCategories = categories.filter(cat => cat.type === 'Income');
-  const expenseCategories = categories.filter(cat => cat.type === 'Expense');
+  // const incomeCategories = categories.filter(cat => cat.type === 'Income');
+  // const expenseCategories = categories.filter(cat => cat.type === 'Expense');
   
   // Get parent categories by type
   const incomeParents = parentCategories.filter(cat => 
@@ -280,12 +280,6 @@ const Planning = () => {
       setError('Failed to load planning data');
       console.error('Error loading planning data:', err);
     }
-  };
-
-  const loadCategoriesData = async () => {
-    // This function is now replaced by loadInitialData and loadPlanningData
-    // Keeping for backwards compatibility but redirecting to new functions
-    await loadInitialData();
   };
 
   // Manual save function that saves all changed budgets
@@ -735,7 +729,7 @@ const Planning = () => {
     
     // Use manual amount if set, otherwise use calculated amount from children
     const effectiveParentAmount = hasManualAmount ? parentMonthlyAmount : calculatedFromChildren;
-    const parentDisplayAmount = getDisplayAmount(effectiveParentAmount);
+    // const parentDisplayAmount = getDisplayAmount(effectiveParentAmount);
     
     const hasParentAmount = effectiveParentAmount > 0;
     const isExpanded = expandedParents.has(parent.categoryId);

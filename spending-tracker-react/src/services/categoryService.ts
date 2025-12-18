@@ -310,7 +310,7 @@ export const getIncomeExpenseSummaryNeon = async (
 
     incomeData?.forEach((row: any) => {
       const category = row.Categories;
-      const parentCategory = category.ParentCategory;
+      // const parentCategory = category.ParentCategory;
 
       // For income, we'll include all positive transactions regardless of category structure
       // since Amount > 0 already filters to income transactions

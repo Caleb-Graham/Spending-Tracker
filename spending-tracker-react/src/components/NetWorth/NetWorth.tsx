@@ -19,11 +19,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel
+  TextField
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -36,7 +32,6 @@ import {
   getNetWorthSnapshotsWithValuesNeon,
   getAllNetWorthAccountTemplatesNeon,
   getAllNetWorthAccountsNeon,
-  getAccountValuesOverTimeNeon,
   type NetWorthSnapshot, 
   type NetWorthCategorySummary,
   type CreateNetWorthSnapshotRequest,
@@ -59,10 +54,9 @@ const NetWorth: React.FC = () => {
   const [accountTemplates, setAccountTemplates] = useState<(CreateNetWorthAssetRequest & { isArchived?: boolean })[]>([]);
   
   // Account filter/sort state
-  const [allAccounts, setAllAccounts] = useState<NetWorthAccountWithId[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<NetWorthAccountWithId | null>(null);
-  const [accountTimeSeries, setAccountTimeSeries] = useState<any[]>([]);
-  const [isLoadingAccountData, setIsLoadingAccountData] = useState(false);
+  const [_allAccounts, _setAllAccounts] = useState<NetWorthAccountWithId[]>([]);
+  const accountTimeSeries: any[] = [];
+  const isLoadingAccountData = false;
   const [accountManagerOpen, setAccountManagerOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   
@@ -148,47 +142,9 @@ const NetWorth: React.FC = () => {
   const loadAllAccounts = async (accessToken: string) => {
     try {
       const accounts = await getAllNetWorthAccountsNeon(accessToken);
-      setAllAccounts(accounts);
+      _setAllAccounts(accounts);
     } catch (error) {
       console.error('Failed to load accounts:', error);
-    }
-  };
-
-  const loadAccountTimeSeries = async (accountId: number, accessToken: string) => {
-    try {
-      setIsLoadingAccountData(true);
-      const startDateStr = dateRangeState.startDate ? dateRangeState.startDate.toISOString().split('T')[0] : undefined;
-      const endDateStr = dateRangeState.endDate ? dateRangeState.endDate.toISOString().split('T')[0] : undefined;
-      const data = await getAccountValuesOverTimeNeon(accessToken, accountId, startDateStr, endDateStr);
-      
-      // Format for chart
-      const chartData = data.map(point => ({
-        date: format(new Date(point.date), 'MMM yyyy'),
-        fullDate: point.date,
-        value: point.value,
-        formattedValue: `$${point.value.toLocaleString('en-US', { 
-          minimumFractionDigits: 2, 
-          maximumFractionDigits: 2 
-        })}`
-      }));
-      
-      setAccountTimeSeries(chartData);
-    } catch (error) {
-      console.error('Failed to load account time series:', error);
-      setAccountTimeSeries([]);
-    } finally {
-      setIsLoadingAccountData(false);
-    }
-  };
-
-  const handleAccountSelect = async (accountId: number) => {
-    const account = allAccounts.find(a => a.accountId === accountId);
-    if (account && user) {
-      setSelectedAccount(account);
-      const authJson = await user.getAuthJson();
-      if (authJson.accessToken) {
-        await loadAccountTimeSeries(accountId, authJson.accessToken);
-      }
     }
   };
 
@@ -617,11 +573,11 @@ const NetWorth: React.FC = () => {
       </div>
 
       {/* Account Time Series Chart */}
-      {selectedAccount && accountTimeSeries.length > 0 && (
+      {accountTimeSeries.length > 0 && (
         <Box style={{ marginTop: '24px' }}>
           <Paper style={{ padding: '20px' }}>
             <Typography variant="h6" gutterBottom>
-              {selectedAccount.name} Over Time
+              Account Value Over Time
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart
@@ -654,7 +610,7 @@ const NetWorth: React.FC = () => {
                   strokeWidth={3}
                   dot={{ fill: '#2196F3', strokeWidth: 2, r: 4 }}
                   activeDot={{ r: 6 }}
-                  name={selectedAccount.name}
+                  name="Account Value"
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -662,7 +618,7 @@ const NetWorth: React.FC = () => {
         </Box>
       )}
 
-      {isLoadingAccountData && selectedAccount && (
+      {isLoadingAccountData && (
         <Box style={{ marginTop: '24px', display: 'flex', justifyContent: 'center' }}>
           <CircularProgress />
         </Box>
