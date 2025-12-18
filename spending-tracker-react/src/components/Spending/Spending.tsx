@@ -664,20 +664,6 @@ const Spending = () => {
                 Clear
               </Button>
             </Box>
-
-            {/* Future Transactions Toggle */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <input
-                type="checkbox"
-                id="showFuture"
-                checked={showFutureOnly}
-                onChange={(e) => setShowFutureOnly(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <label htmlFor="showFuture" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                Show Future Transactions
-              </label>
-            </Box>
           </Box>
         </Paper>
 
