@@ -1,56 +1,44 @@
 .categories-container {
   padding: 24px;
-  max-width: 1200px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
 .categories-header {
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
-[data-theme='dark'] .categories-header h2 {
-  color: rgba(255, 255, 255, 0.87);
+/* Tree view styling */
+.MuiList-root .MuiListItem-root {
+  border-bottom: 1px solid transparent;
 }
 
-.parent-categories-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+.MuiList-root .MuiListItem-root:not(:last-child) {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
-.parent-category-card {
-  min-height: 120px;
-  display: flex;
-  flex-direction: column;
+[data-theme='dark'] .MuiList-root .MuiListItem-root:not(:last-child) {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
-.category-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  flex-grow: 1;
+/* Show action buttons on hover */
+.MuiListItem-root .MuiListItemSecondaryAction-root {
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
-.category-chips .MuiChip-root {
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.category-chips .MuiChip-root:hover {
-  background-color: #f0f0f0;
-}
-
-[data-theme='dark'] .category-chips .MuiChip-root:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+.MuiListItem-root:hover .MuiListItemSecondaryAction-root {
+  opacity: 1;
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .parent-categories-grid {
-    grid-template-columns: 1fr;
-  }
-  
   .categories-container {
     padding: 16px;
+  }
+  
+  /* Always show action buttons on mobile */
+  .MuiListItem-root .MuiListItemSecondaryAction-root {
+    opacity: 1;
   }
 }

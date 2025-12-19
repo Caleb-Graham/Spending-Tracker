@@ -35,12 +35,14 @@ export interface CategoryMapping {
 export interface CreateCategoryMappingRequest {
   categoryName: string;
   type: string;
-  parentCategoryId: number;
+  parentCategoryId?: number;
+  parentCategoryName?: string;
 }
 
 export interface UpdateCategoryMappingRequest {
   categoryName: string;
-  parentCategoryId: number;
+  parentCategoryId?: number;
+  parentCategoryName?: string;
 }
 
 export interface CreateParentCategoryRequest {
@@ -666,13 +668,32 @@ export const createCategoryMappingNeon = async (
 ): Promise<CategoryMapping> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
+  // First, resolve parentCategoryName to parentCategoryId if provided
+  let finalParentCategoryId = request.parentCategoryId;
+
+  if (request.parentCategoryName) {
+    const { data: parentCategory, error: parentError } = await pg
+      .from("Categories")
+      .select("CategoryId")
+      .eq("Name", request.parentCategoryName)
+      .single();
+
+    if (parentError || !parentCategory) {
+      throw new Error(
+        `Parent category "${request.parentCategoryName}" not found`
+      );
+    }
+
+    finalParentCategoryId = parentCategory.CategoryId;
+  }
+
   const { data, error } = await pg
     .from("Categories")
     .insert([
       {
         Name: request.categoryName,
         Type: request.type,
-        ParentCategoryId: request.parentCategoryId,
+        ParentCategoryId: finalParentCategoryId,
       },
     ])
     .select("CategoryId, Name, Type, ParentCategoryId");
@@ -709,11 +730,30 @@ export const updateCategoryMappingNeon = async (
 ): Promise<CategoryMapping> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
+  // First, resolve parentCategoryName to parentCategoryId if provided
+  let finalParentCategoryId = request.parentCategoryId;
+
+  if (request.parentCategoryName) {
+    const { data: parentCategory, error: parentError } = await pg
+      .from("Categories")
+      .select("CategoryId")
+      .eq("Name", request.parentCategoryName)
+      .single();
+
+    if (parentError || !parentCategory) {
+      throw new Error(
+        `Parent category "${request.parentCategoryName}" not found`
+      );
+    }
+
+    finalParentCategoryId = parentCategory.CategoryId;
+  }
+
   const { data, error } = await pg
     .from("Categories")
     .update({
       Name: request.categoryName,
-      ParentCategoryId: request.parentCategoryId,
+      ParentCategoryId: finalParentCategoryId,
     })
     .eq("CategoryId", categoryId)
     .select("CategoryId, Name, Type, ParentCategoryId");
