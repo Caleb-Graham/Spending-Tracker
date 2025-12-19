@@ -33,12 +33,12 @@ import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon } from '@m
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import './Spending.css';
+import './Transactions.css';
 
 type SortField = 'date' | 'note' | 'category' | 'amount' | 'type';
 type SortDirection = 'asc' | 'desc';
 
-const Spending = () => {
+const Transactions = () => {
   const user = useUser();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -592,7 +592,7 @@ const Spending = () => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <div className="spending-container">
+      <div className="transactions-container">
         {/* Authentication Check */}
         {!user && (
           <Alert severity="warning" sx={{ mb: 2 }}>
@@ -607,8 +607,10 @@ const Spending = () => {
           </Alert>
         )}
 
-        <div className="spending-header">
-          <h2>My Spending</h2>
+        <div className="transactions-header">
+          <Typography variant="h4" component="h1" gutterBottom>
+            Transactions
+          </Typography>
           <div className="upload-section">
             <input
               type="file"
@@ -737,7 +739,7 @@ const Spending = () => {
           </Box>
         </Paper>
 
-        <TableContainer component={Paper} className="spending-table">
+        <TableContainer component={Paper} className="transactions-table">
           <Table>
             <TableHead>
               <TableRow>
@@ -1110,4 +1112,4 @@ const Spending = () => {
   );
 };
 
-export default Spending;
+export default Transactions;

@@ -9,7 +9,7 @@
 }
 
 [data-theme='dark'] .categories-header h2 {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 .parent-categories-grid {
@@ -41,7 +41,7 @@
 }
 
 [data-theme='dark'] .category-chips .MuiChip-root:hover {
-  background-color: #333;
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Responsive adjustments */

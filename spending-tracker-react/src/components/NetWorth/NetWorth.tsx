@@ -520,10 +520,7 @@ const NetWorth: React.FC = () => {
       {/* Page Header */}
       <div className="networth-page-header">
         <Typography variant="h4" component="h1" gutterBottom>
-          Net Worth Tracking
-        </Typography>
-        <Typography variant="body1" color="textSecondary" paragraph>
-          Track your net worth over time and analyze your asset allocation
+          Net Worth
         </Typography>
         
         {/* Date Range Controls */}
@@ -737,7 +734,7 @@ const NetWorth: React.FC = () => {
                         key={snapshot.snapshotId}
                         style={{
                           backgroundColor: selectedSnapshot?.snapshotId === snapshot.snapshotId 
-                            ? (isDark ? '#2a2a2a' : '#f5f5f5') 
+                            ? (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5') 
                             : 'transparent'
                         }}
                         hover

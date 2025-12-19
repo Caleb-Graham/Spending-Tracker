@@ -11,16 +11,16 @@
 }
 
 .summary-page-header h1 {
-  margin-bottom: 8px;
+  margin-bottom: 1rem;
   color: var(--text-primary, #333);
 }
 
 [data-theme='dark'] .summary-page-header {
-  border-bottom-color: #333;
+  border-bottom-color: rgba(255, 255, 255, 0.12);
 }
 
 [data-theme='dark'] .summary-page-header h1 {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 .summary-header {
@@ -56,12 +56,12 @@
 
 [data-theme='dark'] .category-table th,
 [data-theme='dark'] .category-table td {
-  border-bottom-color: #333;
-  color: #e8e8e8;
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.87);
 }
 
 [data-theme='dark'] .category-table th {
-  background-color: #252525;
+  background-color: #262626;
 }
 
 .amount-cell {
@@ -74,5 +74,5 @@
 }
 
 [data-theme='dark'] .percentage-cell {
-  color: #a0a0a0;
+  color: rgba(255, 255, 255, 0.60);
 }

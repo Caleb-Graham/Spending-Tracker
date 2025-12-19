@@ -95,7 +95,7 @@
 }
 
 [data-theme='dark'] .planning-container .MuiCard-root {
-  background-color: #2d2d2d;
+  background-color: #1e1e1e;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
@@ -104,16 +104,16 @@
 }
 
 [data-theme='dark'] .planning-container .parent-category-section {
-  background-color: #2d2d2d;
+  background-color: #1e1e1e;
   border-left-color: #90caf9;
 }
 
 [data-theme='dark'] .planning-container .parent-category-title {
-  color: #fff;
-  border-bottom-color: #555;
+  color: rgba(255, 255, 255, 0.87);
+  border-bottom-color: rgba(255, 255, 255, 0.12);
 }
 
 [data-theme='dark'] .planning-container .standalone-section {
-  background-color: #333;
-  border-left-color: #999;
+  background-color: #222222;
+  border-left-color: rgba(255, 255, 255, 0.38);
 }
