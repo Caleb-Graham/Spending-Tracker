@@ -56,7 +56,6 @@ interface ParentPlanningData {
 const Planning = () => {
   const user = useUser();
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const [categories, setCategories] = useState<Category[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
@@ -780,7 +779,7 @@ const Planning = () => {
                 onClick={() => toggleParentExpanded(parent.categoryId)}
                 sx={{ 
                   color: 'text.secondary',
-                  '&:hover': { backgroundColor: isDark ? '#333' : '#f0f0f0' }
+                  '&:hover': { backgroundColor: theme.palette.action.hover }
                 }}
               >
                 {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -836,9 +835,9 @@ const Planning = () => {
                   gap: 1.5, // Reduced gap
                   ml: 1, // Reduced margin
                   p: 1.5, // Reduced padding
-                  backgroundColor: isDark ? '#252525' : '#f8f9fa',
+                  backgroundColor: theme.palette.elevation.dp2,
                   borderRadius: 1,
-                  border: `1px solid ${isDark ? '#444' : '#dee2e6'}`
+                  border: `1px solid ${theme.palette.custom.borderDefault}`
                 }}
               >
                 {childMappings
@@ -891,7 +890,8 @@ const Planning = () => {
                               color: 'text.secondary',
                               fontWeight: 'bold',
                               fontSize: '0.7rem',
-                              backgroundColor: isDark ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.8)',
+                              backgroundColor: theme.palette.background.paper,
+                              opacity: 0.95,
                               padding: '2px 4px',
                               borderRadius: '4px'
                             }}
@@ -930,7 +930,7 @@ const Planning = () => {
             mb: 1, // Reduced margin
             color: 'text.secondary',
             fontWeight: 'bold',
-            borderBottom: `1px solid ${isDark ? '#444' : '#dee2e6'}`, // Thinner border
+            borderBottom: `1px solid ${theme.palette.divider}`, // Thinner border
             paddingBottom: 0.5 // Reduced padding
           }}
         >
@@ -985,7 +985,8 @@ const Planning = () => {
                       color: 'text.secondary',
                       fontWeight: 'bold',
                       fontSize: '0.7rem',
-                      backgroundColor: isDark ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.8)',
+                      backgroundColor: theme.palette.background.paper,
+                      opacity: 0.95,
                       padding: '2px 4px',
                       borderRadius: '4px'
                     }}
@@ -1181,7 +1182,7 @@ const Planning = () => {
             </IconButton>
           }
           sx={{ 
-            backgroundColor: isDark ? '#1565c0' : '#2196F3',
+            backgroundColor: theme.palette.primary.dark,
             color: 'white',
             py: 1.5, // Reduced padding
             '& .MuiCardHeader-title': { fontSize: '1.1rem', fontWeight: 'bold' }

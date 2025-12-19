@@ -16,107 +16,108 @@
 }
 
 [data-theme='dark'] body {
-  background-color: #0a0a0a;
-  color: #e8e8e8;
+  background-color: #121212;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 [data-theme='light'] body {
   background-color: #f5f5f5;
-  color: #333333;
+  color: rgba(0, 0, 0, 0.87);
 }
 
 /* Ensure MUI overrides don't get overwritten */
 [data-theme='dark'] .MuiTableCell-root {
-  color: #e8e8e8;
-  border-bottom-color: #333 !important;
+  color: rgba(255, 255, 255, 0.87);
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 /* Allow success/error colors to show through in table cells */
+/* Using desaturated colors per Material guidelines */
 [data-theme='dark'] .MuiTableCell-root.amount-income {
-  color: #4ade80 !important;
+  color: #81c784 !important; /* Green 300 - desaturated */
 }
 
 [data-theme='dark'] .MuiTableCell-root.amount-expense {
-  color: #f87171 !important;
+  color: #cf6679 !important; /* Material dark theme error */
 }
 
 /* Light mode income/expense colors */
 [data-theme='light'] .MuiTableCell-root.amount-income {
-  color: #16a34a !important;
+  color: #2e7d32 !important; /* Green 800 */
 }
 
 [data-theme='light'] .MuiTableCell-root.amount-expense {
-  color: #dc2626 !important;
+  color: #c62828 !important; /* Red 800 */
 }
 
 /* Income row highlighting */
 [data-theme='dark'] .MuiTableRow-root.income-row {
-  background-color: rgba(74, 222, 128, 0.08) !important;
+  background-color: rgba(129, 199, 132, 0.08) !important; /* Green 300 at 8% */
 }
 
 [data-theme='dark'] .MuiTableRow-root.income-row:hover {
-  background-color: rgba(74, 222, 128, 0.15) !important;
+  background-color: rgba(129, 199, 132, 0.12) !important;
 }
 
 [data-theme='dark'] .MuiTableCell-head {
-  background-color: #252525 !important;
-  color: #e8e8e8 !important;
+  background-color: #262626 !important;
+  color: rgba(255, 255, 255, 0.87) !important;
 }
 
 [data-theme='dark'] .MuiTableBody-root .MuiTableRow-root {
-  background-color: #1a1a1a;
+  background-color: #1e1e1e;
 }
 
 [data-theme='dark'] .MuiTableBody-root .MuiTableRow-root:hover {
-  background-color: #2a2a2a !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 [data-theme='dark'] .MuiTableContainer-root {
-  background-color: #1a1a1a;
+  background-color: #1e1e1e;
 }
 
 [data-theme='dark'] .MuiPaper-root {
-  background-color: #1a1a1a;
+  background-color: #1e1e1e;
 }
 
 [data-theme='dark'] .MuiDialog-paper {
-  background-color: #1a1a1a;
+  background-color: #383838;
 }
 
 [data-theme='dark'] .MuiDialogTitle-root {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 [data-theme='dark'] .MuiDialogContentText-root {
-  color: #a0a0a0;
+  color: rgba(255, 255, 255, 0.60);
 }
 
 [data-theme='dark'] .MuiFormControlLabel-label {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 [data-theme='dark'] .MuiSelect-select {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 [data-theme='dark'] .MuiMenuItem-root {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 [data-theme='dark'] .MuiMenu-paper {
-  background-color: #1a1a1a;
+  background-color: #2e2e2e;
 }
 
 [data-theme='dark'] .MuiInputLabel-root {
-  color: #a0a0a0;
+  color: rgba(255, 255, 255, 0.60);
 }
 
 [data-theme='dark'] .MuiOutlinedInput-notchedOutline {
-  border-color: #444;
+  border-color: rgba(255, 255, 255, 0.23);
 }
 
 [data-theme='dark'] .MuiIconButton-root {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.60);
 }
 
 [data-theme='dark'] .MuiSvgIcon-root {
@@ -134,7 +135,7 @@
 [data-theme='dark'] h5, 
 [data-theme='dark'] h6,
 [data-theme='dark'] p {
-  color: #e8e8e8;
+  color: rgba(255, 255, 255, 0.87);
 }
 
 .main-content {

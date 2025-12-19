@@ -26,7 +26,7 @@ import { ExpandMore, ExpandLess } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { startOfYear, subDays, format } from 'date-fns';
+import { startOfYear, subDays } from 'date-fns';
 import { 
   getCategorySummaryNeon, 
   getIncomeExpenseSummaryNeon, 
@@ -52,7 +52,6 @@ const dateRangeOptions = [
 const Summary = () => {
   const user = useUser();
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   // Load date range from localStorage or default to 'ytd'
   const [dateRange, setDateRange] = useState(() => {
     const saved = localStorage.getItem('summary-date-range');
@@ -373,27 +372,6 @@ const Summary = () => {
     }
   };
 
-  const getDisplayDateRange = () => {
-    if (startDate && endDate) {
-      return `${format(startDate, 'MMM d, yyyy')} - ${format(endDate, 'MMM d, yyyy')}`;
-    }
-    
-    switch (dateRange) {
-      case 'ytd':
-        return `Jan 1, ${new Date().getFullYear()} - Present`;
-      case 'last90':
-        return 'Last 90 Days';
-      case 'last30':
-        return 'Last 30 Days';
-      case 'lastYear':
-        return `${new Date().getFullYear() - 1}`;
-      case 'all':
-        return 'All Time';
-      default:
-        return '';
-    }
-  };
-
   // Transform data for Sankey diagram
   const getSankeyData = () => {
     const nodes: any[] = [];
@@ -658,11 +636,9 @@ const Summary = () => {
                                 <TableRow 
                                   sx={{ 
                                     backgroundColor: parentItem.isParent 
-                                      ? (isDark ? '#252525' : '#f9f9f9') 
-                                      : (isDark ? '#1a1a1a' : 'white'),
-                                    '&:hover': { backgroundColor: parentItem.isParent 
-                                      ? (isDark ? '#2a2a2a' : '#f0f0f0') 
-                                      : (isDark ? '#252525' : '#f5f5f5') }
+                                      ? theme.palette.custom.tableRowAlt 
+                                      : theme.palette.custom.surfaceDefault,
+                                    '&:hover': { backgroundColor: theme.palette.custom.tableRowHover }
                                   }}
                                 >
                                   <TableCell sx={{ paddingLeft: parentItem.isParent ? '16px' : '48px' }}>
@@ -700,8 +676,8 @@ const Summary = () => {
                                   <TableRow 
                                     key={`${parentItem.categoryId}-${child.categoryId}`}
                                     sx={{ 
-                                      backgroundColor: isDark ? '#1e1e1e' : '#fafafa',
-                                      borderLeft: `3px solid ${isDark ? '#90caf9' : '#2196F3'}`
+                                      backgroundColor: theme.palette.custom.surfaceDefault,
+                                      borderLeft: `3px solid ${theme.palette.primary.main}`
                                     }}
                                   >
                                     <TableCell sx={{ paddingLeft: '64px' }}>
@@ -722,8 +698,8 @@ const Summary = () => {
                             ))}
                             {/* Totals Row */}
                             <TableRow sx={{ 
-                              borderTop: `2px solid ${isDark ? '#444' : '#ddd'}`,
-                              backgroundColor: isDark ? '#252525' : '#f5f5f5',
+                              borderTop: `2px solid ${theme.palette.divider}`,
+                              backgroundColor: theme.palette.custom.tableRowAlt,
                               fontWeight: 'bold'
                             }}>
                               <TableCell sx={{ fontWeight: 'bold' }}>
@@ -765,11 +741,9 @@ const Summary = () => {
                               <TableRow 
                                 sx={{ 
                                   backgroundColor: parentItem.isParent 
-                                    ? (isDark ? '#252525' : '#f9f9f9') 
-                                    : (isDark ? '#1a1a1a' : 'white'),
-                                  '&:hover': { backgroundColor: parentItem.isParent 
-                                    ? (isDark ? '#2a2a2a' : '#f0f0f0') 
-                                    : (isDark ? '#252525' : '#f5f5f5') }
+                                    ? theme.palette.custom.tableRowAlt 
+                                    : theme.palette.custom.surfaceDefault,
+                                  '&:hover': { backgroundColor: theme.palette.custom.tableRowHover }
                                 }}
                               >
                                 <TableCell sx={{ paddingLeft: parentItem.isParent ? '16px' : '48px' }}>
@@ -807,8 +781,8 @@ const Summary = () => {
                                 <TableRow 
                                   key={`${parentItem.categoryId}-${child.categoryId}`}
                                   sx={{ 
-                                    backgroundColor: '#fafafa',
-                                    borderLeft: '3px solid #2196F3'
+                                    backgroundColor: theme.palette.custom.surfaceDefault,
+                                    borderLeft: `3px solid ${theme.palette.primary.main}`
                                   }}
                                 >
                                   <TableCell sx={{ paddingLeft: '64px' }}>
@@ -829,8 +803,8 @@ const Summary = () => {
                           ))}
                           {/* Totals Row */}
                           <TableRow sx={{ 
-                            borderTop: '2px solid #ddd',
-                            backgroundColor: '#f5f5f5',
+                            borderTop: `2px solid ${theme.palette.divider}`,
+                            backgroundColor: theme.palette.custom.tableRowAlt,
                             fontWeight: 'bold'
                           }}>
                             <TableCell sx={{ fontWeight: 'bold' }}>

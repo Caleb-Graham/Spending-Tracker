@@ -734,7 +734,7 @@ const NetWorth: React.FC = () => {
                         key={snapshot.snapshotId}
                         style={{
                           backgroundColor: selectedSnapshot?.snapshotId === snapshot.snapshotId 
-                            ? (isDark ? '#2a2a2a' : '#f5f5f5') 
+                            ? (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5') 
                             : 'transparent'
                         }}
                         hover
