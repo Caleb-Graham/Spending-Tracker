@@ -12,6 +12,7 @@ export interface Transaction {
     type: string;
   } | null;
   isIncome: boolean;
+  recurringTransactionId?: number | null;
 }
 
 // Neon Data API version
@@ -43,6 +44,7 @@ export const getTransactionsNeon = async (
       amount: row.Amount,
       categoryId: row.CategoryId,
       isIncome: row.Amount < 0 ? false : true, // negative = expense, positive = income
+      recurringTransactionId: row.RecurringTransactionId,
       category: row.Categories
         ? {
             categoryId: row.Categories.CategoryId,

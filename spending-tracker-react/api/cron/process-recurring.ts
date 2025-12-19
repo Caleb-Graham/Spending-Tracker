@@ -54,9 +54,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Create the actual transaction (UserId will use DEFAULT jwt_uid())
         await client.query(
-          `INSERT INTO "Transactions" ("Date", "Note", "Amount", "CategoryId") 
-           VALUES ($1, $2, $3, $4)`,
-          [rt.NextRunAt, rt.Note, rt.Amount, rt.CategoryId]
+          `INSERT INTO "Transactions" ("Date", "Note", "Amount", "CategoryId", "RecurringTransactionId") 
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            rt.NextRunAt,
+            rt.Note,
+            rt.Amount,
+            rt.CategoryId,
+            rt.RecurringTransactionId,
+          ]
         );
 
         // Calculate the next run date

@@ -29,7 +29,7 @@ import {
   DialogActions,
   Snackbar
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -86,6 +86,10 @@ const Spending = () => {
     recurringInterval: 1
   });
   const [isCreating, setIsCreating] = useState(false);
+
+  // Delete recurring transaction dialog state
+  const [deleteRecurringDialogOpen, setDeleteRecurringDialogOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
 
   const loadTransactions = async () => {
     if (!user) {
@@ -336,10 +340,69 @@ const Spending = () => {
   };
 
   const handleDeleteClick = async (transaction: Transaction) => {
+    // Check if this is a recurring transaction
+    if (transaction.recurringTransactionId) {
+      setTransactionToDelete(transaction);
+      setDeleteRecurringDialogOpen(true);
+      return;
+    }
+
+    // Regular delete confirmation
     if (!window.confirm('Are you sure you want to delete this transaction?')) {
       return;
     }
     
+    await deleteTransaction(transaction);
+  };
+
+  const handleDeleteRecurringConfirm = async (deleteAllFuture: boolean) => {
+    if (!transactionToDelete) return;
+
+    setDeleteRecurringDialogOpen(false);
+
+    if (deleteAllFuture && transactionToDelete.recurringTransactionId) {
+      // Deactivate the recurring transaction
+      if (!user) {
+        setError('Please sign in to delete transactions');
+        return;
+      }
+
+      try {
+        const authJson = await user.getAuthJson();
+        const accessToken = authJson.accessToken;
+
+        if (!accessToken) {
+          throw new Error('No access token available');
+        }
+
+        // Import deleteRecurringTransactionNeon
+        const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+        
+        await deleteRecurringTransactionNeon(
+          transactionToDelete.recurringTransactionId,
+          accessToken
+        );
+
+        setNotification({ 
+          message: 'Recurring transaction deactivated successfully', 
+          severity: 'success' 
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setNotification({ 
+          message: 'Failed to deactivate recurring transaction: ' + errorMessage, 
+          severity: 'error' 
+        });
+        console.error('Error deactivating recurring transaction:', error);
+      }
+    }
+
+    // Delete the current transaction
+    await deleteTransaction(transactionToDelete);
+    setTransactionToDelete(null);
+  };
+
+  const deleteTransaction = async (transaction: Transaction) => {
     if (!user) {
       setError('Please sign in to delete transactions');
       return;
@@ -475,7 +538,7 @@ const Spending = () => {
       }
 
       // Create the first transaction immediately
-      await createTransactionNeon(
+      const createdTransaction = await createTransactionNeon(
         {
           date: createFormData.date,
           note: createFormData.note,
@@ -488,7 +551,7 @@ const Spending = () => {
 
       if (createFormData.isRecurring) {
         // Also create the recurring transaction record for the cron job
-        await createRecurringTransactionNeon(
+        const recurringTransaction = await createRecurringTransactionNeon(
           {
             amount: amount,
             note: createFormData.note,
@@ -500,6 +563,13 @@ const Spending = () => {
           },
           accessToken
         );
+
+        // Link the first transaction to the recurring transaction
+        const pg = PostgrestClientFactory.createClient(accessToken);
+        await pg
+          .from('Transactions')
+          .update({ RecurringTransactionId: recurringTransaction.recurringTransactionId })
+          .eq('TransactionId', createdTransaction.transactionId);
 
         setNotification({ 
           message: `Created transaction and scheduled recurring ${createFormData.recurringFrequency.toLowerCase()} "${createFormData.note}"`, 
@@ -671,6 +741,7 @@ const Spending = () => {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell sx={{ width: 40, padding: '8px' }}></TableCell>
                 <TableCell>
                   <TableSortLabel
                     active={sortField === 'date'}
@@ -722,13 +793,13 @@ const Spending = () => {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={7} align="center">
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : sortedTransactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={7} align="center">
                     {transactions.length === 0 
                       ? "No transactions found. Upload a CSV file to get started."
                       : "No transactions match the current filters."
@@ -743,6 +814,19 @@ const Spending = () => {
                       backgroundColor: transaction.isIncome ? 'rgba(76, 175, 80, 0.1)' : undefined
                     }}
                   >
+                    <TableCell sx={{ width: 40, padding: '8px', textAlign: 'center' }}>
+                      {transaction.recurringTransactionId && (
+                        <RepeatIcon 
+                          sx={{ 
+                            fontSize: 18, 
+                            color: 'primary.main',
+                            opacity: 0.7,
+                            display: 'block'
+                          }} 
+                          titleAccess="Recurring transaction"
+                        />
+                      )}
+                    </TableCell>
                     <TableCell>{transaction.date.split('T')[0]}</TableCell>
                     <TableCell>{transaction.note}</TableCell>
                     <TableCell>{transaction.category?.name || 'Uncategorized'}</TableCell>
@@ -849,6 +933,39 @@ const Spending = () => {
               disabled={isSaving}
             >
               {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete Recurring Transaction Dialog */}
+        <Dialog 
+          open={deleteRecurringDialogOpen} 
+          onClose={() => setDeleteRecurringDialogOpen(false)}
+          maxWidth="sm" 
+          fullWidth
+        >
+          <DialogTitle>Delete Recurring Transaction</DialogTitle>
+          <DialogContent>
+            <Typography>
+              This transaction is part of a recurring series. Do you want to delete all future transactions as well?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteRecurringDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => handleDeleteRecurringConfirm(false)}
+              color="primary"
+            >
+              Delete This Only
+            </Button>
+            <Button 
+              onClick={() => handleDeleteRecurringConfirm(true)}
+              color="error"
+              variant="contained"
+            >
+              Delete All Future
             </Button>
           </DialogActions>
         </Dialog>
