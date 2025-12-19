@@ -4,7 +4,7 @@ import { StackHandler, StackProvider, StackTheme } from '@stackframe/react';
 import './App.css';
 import Header from './components/shared/Header';
 import Summary from './components/Summary/Summary';
-import Spending from './components/Spending/Spending';
+import Transactions from './components/Transactions/Transactions';
 import Categories from './components/Categories/Categories';
 import NetWorth from './components/NetWorth/NetWorth';
 import Planning from './components/Planning/Planning';
@@ -24,7 +24,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Navigate to="/summary" replace />} />
           <Route path="/summary" element={<Summary />} />
-          <Route path="/spending" element={<Spending />} />
+          <Route path="/spending" element={<Transactions />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/networth" element={<NetWorth />} />
           <Route path="/planning" element={<Planning />} />

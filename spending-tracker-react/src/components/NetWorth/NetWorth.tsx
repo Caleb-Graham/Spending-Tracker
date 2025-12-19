@@ -520,10 +520,7 @@ const NetWorth: React.FC = () => {
       {/* Page Header */}
       <div className="networth-page-header">
         <Typography variant="h4" component="h1" gutterBottom>
-          Net Worth Tracking
-        </Typography>
-        <Typography variant="body1" color="textSecondary" paragraph>
-          Track your net worth over time and analyze your asset allocation
+          Net Worth
         </Typography>
         
         {/* Date Range Controls */}

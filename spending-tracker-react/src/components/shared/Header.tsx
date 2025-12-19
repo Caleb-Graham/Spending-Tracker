@@ -75,7 +75,7 @@ const Header: React.FC = () => {
             indicatorColor="primary"
             sx={{
               '& .MuiTab-root': {
-                color: 'text.secondary',
+                color: 'text.primary',
                 '&.Mui-selected': {
                   color: 'primary.main',
                   fontWeight: 600
@@ -83,11 +83,11 @@ const Header: React.FC = () => {
               }
             }}
           >
-            <Tab label="📊 Summary" value="/summary" component={Link} to="/summary" />
-            <Tab label="💰 My Spending" value="/spending" component={Link} to="/spending" />
-            <Tab label="📂 Categories" value="/categories" component={Link} to="/categories" />
-            <Tab label="📈 Net Worth" value="/networth" component={Link} to="/networth" />
-            <Tab label="📋 Planning" value="/planning" component={Link} to="/planning" />
+            <Tab label="Summary" value="/summary" component={Link} to="/summary" />
+            <Tab label="Transactions" value="/spending" component={Link} to="/spending" />
+            <Tab label="Categories" value="/categories" component={Link} to="/categories" />
+            <Tab label="Net Worth" value="/networth" component={Link} to="/networth" />
+            <Tab label="Planning" value="/planning" component={Link} to="/planning" />
           </Tabs>
         </Box>
 

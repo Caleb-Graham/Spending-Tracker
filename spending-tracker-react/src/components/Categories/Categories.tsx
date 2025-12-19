@@ -571,11 +571,8 @@ const Categories = () => {
     <DndProvider backend={HTML5Backend}>
       <div className="categories-container">
         <div className="categories-header">
-          <Typography variant="h4" gutterBottom>
-            Category Management
-          </Typography>
-          <Typography variant="body1" color="textSecondary" paragraph>
-            Manage your parent categories and their child categories. Drag child categories between parents to reorganize them.
+          <Typography variant="h4" component="h1" gutterBottom>
+            Categories
           </Typography>
           
           {/* Category Type Toggle */}

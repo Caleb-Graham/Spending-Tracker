@@ -529,10 +529,7 @@ const Summary = () => {
       {/* Page Header */}
       <div className="summary-page-header">
         <Typography variant="h4" component="h1" gutterBottom>
-          Spending Summary
-        </Typography>
-        <Typography variant="body1" color="textSecondary" paragraph>
-          View your spending breakdown and category analysis for {getDisplayDateRange()}
+          Summary
         </Typography>
         
         {/* Date Range Controls */}
@@ -810,8 +807,8 @@ const Summary = () => {
                                 <TableRow 
                                   key={`${parentItem.categoryId}-${child.categoryId}`}
                                   sx={{ 
-                                    backgroundColor: isDark ? '#1e1e1e' : '#fafafa',
-                                    borderLeft: `3px solid ${isDark ? '#90caf9' : '#2196F3'}`
+                                    backgroundColor: '#fafafa',
+                                    borderLeft: '3px solid #2196F3'
                                   }}
                                 >
                                   <TableCell sx={{ paddingLeft: '64px' }}>
@@ -832,8 +829,8 @@ const Summary = () => {
                           ))}
                           {/* Totals Row */}
                           <TableRow sx={{ 
-                            borderTop: `2px solid ${isDark ? '#444' : '#ddd'}`,
-                            backgroundColor: isDark ? '#252525' : '#f5f5f5',
+                            borderTop: '2px solid #ddd',
+                            backgroundColor: '#f5f5f5',
                             fontWeight: 'bold'
                           }}>
                             <TableCell sx={{ fontWeight: 'bold' }}>

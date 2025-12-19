@@ -1,4 +1,4 @@
-.spending-container {
+.transactions-container {
   padding: 20px;
 }
 
@@ -6,30 +6,30 @@
   margin-top: 20px;
 }
 
-.spending-container {
+.transactions-container {
   padding: 20px;
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.spending-header {
+.transactions-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
 
-.spending-header h2 {
+.transactions-header h2 {
   margin: 0;
   color: var(--text-primary, #333);
 }
 
-[data-theme='dark'] .spending-header h2 {
+[data-theme='dark'] .transactions-header h2 {
   color: #e8e8e8;
 }
 
-.spending-table {
+.transactions-table {
   flex-grow: 1;
   overflow: auto;
 }

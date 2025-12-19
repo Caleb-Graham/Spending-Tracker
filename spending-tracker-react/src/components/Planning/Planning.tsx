@@ -1052,8 +1052,8 @@ const Planning = () => {
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
           <Box>
-            <Typography variant="h4" gutterBottom>
-              Financial Planning
+            <Typography variant="h4" component="h1" gutterBottom>
+              Planning
             </Typography>
             {/* Scenario Selector */}
             {scenarios.length > 0 && (

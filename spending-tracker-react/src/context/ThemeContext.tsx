@@ -59,10 +59,10 @@ const createAppTheme = (mode: ThemeMode): Theme => {
         : {
             // Dark mode
             primary: {
-              main: '#90caf9',
+              main: '#a2cbe6ff',
             },
             secondary: {
-              main: '#f48fb1',
+              main: '#c0426cff',
             },
             background: {
               default: '#0a0a0a',
