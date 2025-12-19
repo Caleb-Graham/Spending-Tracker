@@ -23,7 +23,8 @@ import {
   Card,
   CardContent,
   Divider,
-  Menu
+  Menu,
+  useTheme
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -81,7 +82,8 @@ const DraggableChildChip: React.FC<{
   onDelete: (id: number) => void;
   onMove: (childId: number, newParentId: number) => void;
   isUnassigned?: boolean;
-}> = ({ mapping, parentCategories, onEdit, onDelete, onMove, isUnassigned = false }) => {
+  isDark?: boolean;
+}> = ({ mapping, parentCategories, onEdit, onDelete, onMove, isUnassigned = false, isDark = false }) => {
   const currentParent = parentCategories.find(p => p.name === mapping.parentCategory);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   
@@ -127,7 +129,7 @@ const DraggableChildChip: React.FC<{
           style={{ 
             margin: '2px', 
             cursor: 'grab',
-            backgroundColor: isUnassigned ? '#fff3e0' : undefined,
+            backgroundColor: isUnassigned ? (isDark ? '#3d2a00' : '#fff3e0') : undefined,
             borderColor: isUnassigned ? '#ff9800' : undefined,
             border: isUnassigned ? '1px solid #ff9800' : undefined
           }}
@@ -178,6 +180,7 @@ const DroppableParentCard: React.FC<{
   onDeleteParent: (id: number) => void;
   onAddChild: (parentId: number) => void;
   onMove: (childId: number, newParentId: number) => void;
+  isDark?: boolean;
 }> = ({ 
   parentCategory, 
   mappings, 
@@ -187,7 +190,8 @@ const DroppableParentCard: React.FC<{
   onEditParent, 
   onDeleteParent, 
   onAddChild, 
-  onMove 
+  onMove,
+  isDark = false 
 }) => {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: ItemTypes.CHILD_CATEGORY,
@@ -210,8 +214,12 @@ const DroppableParentCard: React.FC<{
       <Card 
         style={{ 
           margin: '10px', 
-          backgroundColor: isOver ? '#e3f2fd' : 'white',
-          border: isOver ? '2px dashed #2196f3' : '1px solid #e0e0e0',
+          backgroundColor: isOver 
+            ? (isDark ? '#1a3a5c' : '#e3f2fd') 
+            : (isDark ? '#1a1a1a' : 'white'),
+          border: isOver 
+            ? `2px dashed ${isDark ? '#90caf9' : '#2196f3'}` 
+            : `1px solid ${isDark ? '#333' : '#e0e0e0'}`,
           transition: 'all 0.2s ease'
         }}
       >
@@ -262,6 +270,7 @@ const DroppableParentCard: React.FC<{
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onMove={onMove}
+                isDark={isDark}
               />
             ))}
             {childMappings.length === 0 && (
@@ -278,6 +287,8 @@ const DroppableParentCard: React.FC<{
 
 const Categories = () => {
   const user = useUser();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
   const [selectedCategoryType, setSelectedCategoryType] = useState<'Income' | 'Expense'>('Expense');
@@ -617,7 +628,7 @@ const Categories = () => {
                   gridColumn: '1 / -1', 
                   margin: '10px', 
                   padding: '16px', 
-                  backgroundColor: '#fff3e0',
+                  backgroundColor: isDark ? '#3d2a00' : '#fff3e0',
                   border: '2px solid #ff9800',
                   marginBottom: '20px'
                 }}>
@@ -625,7 +636,7 @@ const Categories = () => {
                     <Box display="flex" alignItems="center" gap={1}>
                       <WarningIcon sx={{ color: '#ff9800', fontSize: '24px' }} />
                       <Box>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#e65100' }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, color: isDark ? '#ffb74d' : '#e65100' }}>
                           Unassigned Categories ({unassignedMappings.length})
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
@@ -644,6 +655,7 @@ const Categories = () => {
                         onDelete={(id) => handleDelete('child', id)}
                         onMove={handleMoveChild}
                         isUnassigned={true}
+                        isDark={isDark}
                       />
                     ))}
                   </Box>
@@ -668,6 +680,7 @@ const Categories = () => {
               onDeleteParent={(id) => handleDelete('parent', id)}
               onAddChild={(parentId) => openDialog('child', 'create', { parentCategoryId: parentId })}
               onMove={handleMoveChild}
+              isDark={isDark}
             />
           ))}
           

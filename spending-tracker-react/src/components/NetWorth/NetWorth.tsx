@@ -19,7 +19,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField
+  TextField,
+  useTheme
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -46,6 +47,8 @@ import './NetWorth.css';
 
 const NetWorth: React.FC = () => {
   const user = useUser();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [snapshots, setSnapshots] = useState<NetWorthSnapshot[]>([]);
   const [selectedSnapshot, setSelectedSnapshot] = useState<NetWorthSnapshot | null>(null);
   const [categorySummary, setCategorySummary] = useState<NetWorthCategorySummary | null>(null);
@@ -733,7 +736,9 @@ const NetWorth: React.FC = () => {
                       <TableRow
                         key={snapshot.snapshotId}
                         style={{
-                          backgroundColor: selectedSnapshot?.snapshotId === snapshot.snapshotId ? '#f5f5f5' : 'transparent'
+                          backgroundColor: selectedSnapshot?.snapshotId === snapshot.snapshotId 
+                            ? (isDark ? '#2a2a2a' : '#f5f5f5') 
+                            : 'transparent'
                         }}
                         hover
                       >

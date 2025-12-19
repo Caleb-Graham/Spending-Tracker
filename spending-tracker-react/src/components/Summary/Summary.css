@@ -7,12 +7,20 @@
 .summary-page-header {
   margin-bottom: 32px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid var(--border-color, #f0f0f0);
 }
 
 .summary-page-header h1 {
   margin-bottom: 8px;
-  color: #333;
+  color: var(--text-primary, #333);
+}
+
+[data-theme='dark'] .summary-page-header {
+  border-bottom-color: #333;
+}
+
+[data-theme='dark'] .summary-page-header h1 {
+  color: #e8e8e8;
 }
 
 .summary-header {
@@ -38,12 +46,22 @@
 .category-table td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color, #eee);
 }
 
 .category-table th {
-  background-color: #f5f5f5;
+  background-color: var(--table-header-bg, #f5f5f5);
   font-weight: 600;
+}
+
+[data-theme='dark'] .category-table th,
+[data-theme='dark'] .category-table td {
+  border-bottom-color: #333;
+  color: #e8e8e8;
+}
+
+[data-theme='dark'] .category-table th {
+  background-color: #252525;
 }
 
 .amount-cell {
@@ -52,5 +70,9 @@
 
 .percentage-cell {
   text-align: right;
-  color: #666;
+  color: var(--text-secondary, #666);
+}
+
+[data-theme='dark'] .percentage-cell {
+  color: #a0a0a0;
 }

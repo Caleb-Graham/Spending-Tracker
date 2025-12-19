@@ -65,12 +65,18 @@ const createAppTheme = (mode: ThemeMode): Theme => {
               main: '#f48fb1',
             },
             background: {
-              default: '#121212',
-              paper: '#1e1e1e',
+              default: '#0a0a0a',
+              paper: '#1a1a1a',
             },
             text: {
-              primary: '#ffffff',
-              secondary: '#b0b0b0',
+              primary: '#e8e8e8',
+              secondary: '#a0a0a0',
+            },
+            error: {
+              main: '#f87171',
+            },
+            success: {
+              main: '#4ade80',
             },
           }),
     },
@@ -78,36 +84,62 @@ const createAppTheme = (mode: ThemeMode): Theme => {
       MuiAppBar: {
         styleOverrides: {
           root: ({ theme }) => ({
-            backgroundColor: theme.palette.mode === 'dark' ? '#1e1e1e' : '#ffffff',
+            backgroundColor: theme.palette.mode === 'dark' ? '#1a1a1a' : '#ffffff',
             color: theme.palette.text.primary,
           }),
         },
       },
       MuiPaper: {
         styleOverrides: {
-          root: {
+          root: ({ theme }) => ({
             backgroundImage: 'none',
-          },
+            backgroundColor: theme.palette.background.paper,
+          }),
+        },
+      },
+      MuiTableContainer: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            backgroundColor: theme.palette.background.paper,
+          }),
         },
       },
       MuiTableCell: {
         styleOverrides: {
           root: ({ theme }) => ({
             borderBottomColor: theme.palette.mode === 'dark' ? '#333333' : '#e0e0e0',
+            color: theme.palette.text.primary,
+          }),
+          head: ({ theme }) => ({
+            backgroundColor: theme.palette.mode === 'dark' ? '#252525' : '#f5f5f5',
+            color: theme.palette.text.primary,
+            fontWeight: 600,
+          }),
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            '&:hover': {
+              backgroundColor: theme.palette.mode === 'dark' ? '#2a2a2a' : '#f5f5f5',
+            },
           }),
         },
       },
       MuiTableHead: {
         styleOverrides: {
           root: ({ theme }) => ({
-            backgroundColor: theme.palette.mode === 'dark' ? '#2d2d2d' : '#f5f5f5',
+            backgroundColor: theme.palette.mode === 'dark' ? '#252525' : '#f5f5f5',
+            '& .MuiTableCell-head': {
+              backgroundColor: theme.palette.mode === 'dark' ? '#252525' : '#f5f5f5',
+            },
           }),
         },
       },
       MuiTab: {
         styleOverrides: {
           root: ({ theme }) => ({
-            color: theme.palette.text.secondary,
+            color: theme.palette.mode === 'dark' ? '#a0a0a0' : '#666666',
             '&.Mui-selected': {
               color: theme.palette.primary.main,
             },
@@ -120,6 +152,55 @@ const createAppTheme = (mode: ThemeMode): Theme => {
             ...(theme.palette.mode === 'dark' && {
               borderColor: '#444444',
             }),
+          }),
+        },
+      },
+      MuiButton: {
+        styleOverrides: {
+          outlined: ({ theme }) => ({
+            borderColor: theme.palette.mode === 'dark' ? '#444444' : undefined,
+          }),
+        },
+      },
+      MuiSelect: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            backgroundColor: theme.palette.background.paper,
+          }),
+        },
+      },
+      MuiTextField: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            '& .MuiOutlinedInput-root': {
+              backgroundColor: theme.palette.background.paper,
+            },
+          }),
+        },
+      },
+      MuiInputBase: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            color: theme.palette.text.primary,
+          }),
+        },
+      },
+      MuiTypography: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            color: theme.palette.text.primary,
+          }),
+        },
+      },
+      MuiToggleButton: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            color: theme.palette.text.primary,
+            borderColor: theme.palette.mode === 'dark' ? '#444444' : '#e0e0e0',
+            '&.Mui-selected': {
+              backgroundColor: theme.palette.mode === 'dark' ? '#333333' : '#e3f2fd',
+              color: theme.palette.primary.main,
+            },
           }),
         },
       },

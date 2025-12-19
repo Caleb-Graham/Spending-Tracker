@@ -83,3 +83,30 @@
     align-items: stretch;
   }
 }
+
+/* Dark mode styles */
+[data-theme='dark'] .networth-page-header {
+  border-bottom-color: #444;
+}
+
+[data-theme='dark'] .networth-page-header h1 {
+  color: #fff;
+}
+
+[data-theme='dark'] .custom-tooltip {
+  background: rgba(30, 30, 30, 0.95);
+  border-color: #555;
+}
+
+[data-theme='dark'] .custom-tooltip .label {
+  color: #fff;
+}
+
+[data-theme='dark'] .custom-tooltip .desc {
+  color: #bbb;
+}
+
+[data-theme='dark'] .net-worth-total {
+  background-color: #2d2d2d;
+  color: #fff;
+}

@@ -19,7 +19,8 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   IconButton,
-  Button
+  Button,
+  useTheme
 } from '@mui/material';
 import { ExpandMore, ExpandLess } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -50,6 +51,8 @@ const dateRangeOptions = [
 
 const Summary = () => {
   const user = useUser();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   // Load date range from localStorage or default to 'ytd'
   const [dateRange, setDateRange] = useState(() => {
     const saved = localStorage.getItem('summary-date-range');
@@ -657,8 +660,12 @@ const Summary = () => {
                               <React.Fragment key={parentItem.categoryId}>
                                 <TableRow 
                                   sx={{ 
-                                    backgroundColor: parentItem.isParent ? '#f9f9f9' : 'white',
-                                    '&:hover': { backgroundColor: parentItem.isParent ? '#f0f0f0' : 'white' }
+                                    backgroundColor: parentItem.isParent 
+                                      ? (isDark ? '#252525' : '#f9f9f9') 
+                                      : (isDark ? '#1a1a1a' : 'white'),
+                                    '&:hover': { backgroundColor: parentItem.isParent 
+                                      ? (isDark ? '#2a2a2a' : '#f0f0f0') 
+                                      : (isDark ? '#252525' : '#f5f5f5') }
                                   }}
                                 >
                                   <TableCell sx={{ paddingLeft: parentItem.isParent ? '16px' : '48px' }}>
@@ -696,8 +703,8 @@ const Summary = () => {
                                   <TableRow 
                                     key={`${parentItem.categoryId}-${child.categoryId}`}
                                     sx={{ 
-                                      backgroundColor: '#fafafa',
-                                      borderLeft: '3px solid #2196F3'
+                                      backgroundColor: isDark ? '#1e1e1e' : '#fafafa',
+                                      borderLeft: `3px solid ${isDark ? '#90caf9' : '#2196F3'}`
                                     }}
                                   >
                                     <TableCell sx={{ paddingLeft: '64px' }}>
@@ -718,8 +725,8 @@ const Summary = () => {
                             ))}
                             {/* Totals Row */}
                             <TableRow sx={{ 
-                              borderTop: '2px solid #ddd',
-                              backgroundColor: '#f5f5f5',
+                              borderTop: `2px solid ${isDark ? '#444' : '#ddd'}`,
+                              backgroundColor: isDark ? '#252525' : '#f5f5f5',
                               fontWeight: 'bold'
                             }}>
                               <TableCell sx={{ fontWeight: 'bold' }}>
@@ -760,8 +767,12 @@ const Summary = () => {
                             <React.Fragment key={parentItem.categoryId}>
                               <TableRow 
                                 sx={{ 
-                                  backgroundColor: parentItem.isParent ? '#f9f9f9' : 'white',
-                                  '&:hover': { backgroundColor: parentItem.isParent ? '#f0f0f0' : 'white' }
+                                  backgroundColor: parentItem.isParent 
+                                    ? (isDark ? '#252525' : '#f9f9f9') 
+                                    : (isDark ? '#1a1a1a' : 'white'),
+                                  '&:hover': { backgroundColor: parentItem.isParent 
+                                    ? (isDark ? '#2a2a2a' : '#f0f0f0') 
+                                    : (isDark ? '#252525' : '#f5f5f5') }
                                 }}
                               >
                                 <TableCell sx={{ paddingLeft: parentItem.isParent ? '16px' : '48px' }}>
@@ -799,8 +810,8 @@ const Summary = () => {
                                 <TableRow 
                                   key={`${parentItem.categoryId}-${child.categoryId}`}
                                   sx={{ 
-                                    backgroundColor: '#fafafa',
-                                    borderLeft: '3px solid #2196F3'
+                                    backgroundColor: isDark ? '#1e1e1e' : '#fafafa',
+                                    borderLeft: `3px solid ${isDark ? '#90caf9' : '#2196F3'}`
                                   }}
                                 >
                                   <TableCell sx={{ paddingLeft: '64px' }}>
@@ -821,8 +832,8 @@ const Summary = () => {
                           ))}
                           {/* Totals Row */}
                           <TableRow sx={{ 
-                            borderTop: '2px solid #ddd',
-                            backgroundColor: '#f5f5f5',
+                            borderTop: `2px solid ${isDark ? '#444' : '#ddd'}`,
+                            backgroundColor: isDark ? '#252525' : '#f5f5f5',
                             fontWeight: 'bold'
                           }}>
                             <TableCell sx={{ fontWeight: 'bold' }}>

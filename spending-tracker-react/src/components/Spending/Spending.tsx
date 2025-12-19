@@ -676,7 +676,7 @@ const Spending = () => {
                   <MenuItem value="all">
                     All Categories
                     {typeFilter !== 'all' && (
-                      <span style={{ fontSize: '0.75em', color: '#666', marginLeft: '4px' }}>
+                      <span style={{ fontSize: '0.75em', opacity: 0.7, marginLeft: '4px' }}>
                         ({typeFilter})
                       </span>
                     )}
@@ -810,6 +810,7 @@ const Spending = () => {
                 paginatedTransactions.map((transaction) => (
                   <TableRow 
                     key={transaction.transactionId}
+                    className={transaction.isIncome ? 'income-row' : undefined}
                     sx={{ 
                       backgroundColor: transaction.isIncome ? 'rgba(76, 175, 80, 0.1)' : undefined
                     }}
@@ -830,9 +831,13 @@ const Spending = () => {
                     <TableCell>{transaction.date.split('T')[0]}</TableCell>
                     <TableCell>{transaction.note}</TableCell>
                     <TableCell>{transaction.category?.name || 'Uncategorized'}</TableCell>
-                    <TableCell align="right" sx={{ 
-                      color: transaction.isIncome ? 'success.main' : 'error.main'
-                    }}>
+                    <TableCell 
+                      align="right" 
+                      className={transaction.isIncome ? 'amount-income' : 'amount-expense'}
+                      sx={{ 
+                        color: transaction.isIncome ? 'success.main' : 'error.main'
+                      }}
+                    >
                       ${Math.abs(transaction.amount).toLocaleString('en-US', { 
                         minimumFractionDigits: 2, 
                         maximumFractionDigits: 2 

@@ -75,9 +75,9 @@ const Header: React.FC = () => {
             indicatorColor="primary"
             sx={{
               '& .MuiTab-root': {
-                color: '#666',
+                color: 'text.secondary',
                 '&.Mui-selected': {
-                  color: '#1976d2',
+                  color: 'primary.main',
                   fontWeight: 600
                 }
               }

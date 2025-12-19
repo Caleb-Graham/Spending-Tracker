@@ -19,7 +19,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  useTheme
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
@@ -54,6 +55,8 @@ interface ParentPlanningData {
 
 const Planning = () => {
   const user = useUser();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [categories, setCategories] = useState<Category[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
@@ -746,7 +749,7 @@ const Planning = () => {
             <Typography 
               variant="subtitle1" // Smaller typography
               sx={{ 
-                color: '#666',
+                color: 'text.secondary',
                 fontWeight: 'bold',
                 flex: 1
               }}
@@ -759,7 +762,7 @@ const Planning = () => {
               <Typography 
                 variant="caption" 
                 sx={{ 
-                  color: '#888',
+                  color: 'text.secondary',
                   fontWeight: 'bold',
                   fontSize: '0.75rem',
                   minWidth: '45px',
@@ -776,8 +779,8 @@ const Planning = () => {
                 size="small"
                 onClick={() => toggleParentExpanded(parent.categoryId)}
                 sx={{ 
-                  color: '#666',
-                  '&:hover': { backgroundColor: '#f0f0f0' }
+                  color: 'text.secondary',
+                  '&:hover': { backgroundColor: isDark ? '#333' : '#f0f0f0' }
                 }}
               >
                 {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -807,7 +810,7 @@ const Planning = () => {
               startAdornment: <InputAdornment position="start">$</InputAdornment>,
               endAdornment: savingStates.has(parent.categoryId) ? (
                 <InputAdornment position="end">
-                  <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
                     Saving...
                   </Typography>
                 </InputAdornment>
@@ -833,9 +836,9 @@ const Planning = () => {
                   gap: 1.5, // Reduced gap
                   ml: 1, // Reduced margin
                   p: 1.5, // Reduced padding
-                  backgroundColor: '#f8f9fa',
+                  backgroundColor: isDark ? '#252525' : '#f8f9fa',
                   borderRadius: 1,
-                  border: '1px solid #dee2e6'
+                  border: `1px solid ${isDark ? '#444' : '#dee2e6'}`
                 }}
               >
                 {childMappings
@@ -868,7 +871,7 @@ const Planning = () => {
                             startAdornment: <InputAdornment position="start">$</InputAdornment>,
                             endAdornment: savingStates.has(mapping.categoryId) ? (
                               <InputAdornment position="end">
-                                <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem' }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
                                   Saving...
                                 </Typography>
                               </InputAdornment>
@@ -885,10 +888,10 @@ const Planning = () => {
                               position: 'absolute',
                               top: '6px',
                               right: '8px',
-                              color: '#888',
+                              color: 'text.secondary',
                               fontWeight: 'bold',
                               fontSize: '0.7rem',
-                              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                              backgroundColor: isDark ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.8)',
                               padding: '2px 4px',
                               borderRadius: '4px'
                             }}
@@ -925,9 +928,9 @@ const Planning = () => {
           variant="subtitle1" // Smaller typography
           sx={{ 
             mb: 1, // Reduced margin
-            color: '#666',
+            color: 'text.secondary',
             fontWeight: 'bold',
-            borderBottom: '1px solid #dee2e6', // Thinner border
+            borderBottom: `1px solid ${isDark ? '#444' : '#dee2e6'}`, // Thinner border
             paddingBottom: 0.5 // Reduced padding
           }}
         >
@@ -962,7 +965,7 @@ const Planning = () => {
                     startAdornment: <InputAdornment position="start">$</InputAdornment>,
                     endAdornment: savingStates.has(category.categoryId) ? (
                       <InputAdornment position="end">
-                        <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
                           Saving...
                         </Typography>
                       </InputAdornment>
@@ -979,10 +982,10 @@ const Planning = () => {
                       position: 'absolute',
                       top: '6px',
                       right: '8px',
-                      color: '#888',
+                      color: 'text.secondary',
                       fontWeight: 'bold',
                       fontSize: '0.7rem',
-                      backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                      backgroundColor: isDark ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.8)',
                       padding: '2px 4px',
                       borderRadius: '4px'
                     }}
@@ -1178,7 +1181,7 @@ const Planning = () => {
             </IconButton>
           }
           sx={{ 
-            backgroundColor: '#2196F3',
+            backgroundColor: isDark ? '#1565c0' : '#2196F3',
             color: 'white',
             py: 1.5, // Reduced padding
             '& .MuiCardHeader-title': { fontSize: '1.1rem', fontWeight: 'bold' }

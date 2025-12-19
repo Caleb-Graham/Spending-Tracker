@@ -16,13 +16,125 @@
 }
 
 [data-theme='dark'] body {
-  background-color: #121212;
-  color: #ffffff;
+  background-color: #0a0a0a;
+  color: #e8e8e8;
 }
 
 [data-theme='light'] body {
   background-color: #f5f5f5;
   color: #333333;
+}
+
+/* Ensure MUI overrides don't get overwritten */
+[data-theme='dark'] .MuiTableCell-root {
+  color: #e8e8e8;
+  border-bottom-color: #333 !important;
+}
+
+/* Allow success/error colors to show through in table cells */
+[data-theme='dark'] .MuiTableCell-root.amount-income {
+  color: #4ade80 !important;
+}
+
+[data-theme='dark'] .MuiTableCell-root.amount-expense {
+  color: #f87171 !important;
+}
+
+/* Light mode income/expense colors */
+[data-theme='light'] .MuiTableCell-root.amount-income {
+  color: #16a34a !important;
+}
+
+[data-theme='light'] .MuiTableCell-root.amount-expense {
+  color: #dc2626 !important;
+}
+
+/* Income row highlighting */
+[data-theme='dark'] .MuiTableRow-root.income-row {
+  background-color: rgba(74, 222, 128, 0.08) !important;
+}
+
+[data-theme='dark'] .MuiTableRow-root.income-row:hover {
+  background-color: rgba(74, 222, 128, 0.15) !important;
+}
+
+[data-theme='dark'] .MuiTableCell-head {
+  background-color: #252525 !important;
+  color: #e8e8e8 !important;
+}
+
+[data-theme='dark'] .MuiTableBody-root .MuiTableRow-root {
+  background-color: #1a1a1a;
+}
+
+[data-theme='dark'] .MuiTableBody-root .MuiTableRow-root:hover {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme='dark'] .MuiTableContainer-root {
+  background-color: #1a1a1a;
+}
+
+[data-theme='dark'] .MuiPaper-root {
+  background-color: #1a1a1a;
+}
+
+[data-theme='dark'] .MuiDialog-paper {
+  background-color: #1a1a1a;
+}
+
+[data-theme='dark'] .MuiDialogTitle-root {
+  color: #e8e8e8;
+}
+
+[data-theme='dark'] .MuiDialogContentText-root {
+  color: #a0a0a0;
+}
+
+[data-theme='dark'] .MuiFormControlLabel-label {
+  color: #e8e8e8;
+}
+
+[data-theme='dark'] .MuiSelect-select {
+  color: #e8e8e8;
+}
+
+[data-theme='dark'] .MuiMenuItem-root {
+  color: #e8e8e8;
+}
+
+[data-theme='dark'] .MuiMenu-paper {
+  background-color: #1a1a1a;
+}
+
+[data-theme='dark'] .MuiInputLabel-root {
+  color: #a0a0a0;
+}
+
+[data-theme='dark'] .MuiOutlinedInput-notchedOutline {
+  border-color: #444;
+}
+
+[data-theme='dark'] .MuiIconButton-root {
+  color: #e8e8e8;
+}
+
+[data-theme='dark'] .MuiSvgIcon-root {
+  color: inherit;
+}
+
+[data-theme='dark'] .MuiTypography-root {
+  color: inherit;
+}
+
+[data-theme='dark'] h1, 
+[data-theme='dark'] h2, 
+[data-theme='dark'] h3, 
+[data-theme='dark'] h4, 
+[data-theme='dark'] h5, 
+[data-theme='dark'] h6,
+[data-theme='dark'] p {
+  color: #e8e8e8;
 }
 
 .main-content {

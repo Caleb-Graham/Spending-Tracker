@@ -8,6 +8,10 @@
   margin-bottom: 32px;
 }
 
+[data-theme='dark'] .categories-header h2 {
+  color: #e8e8e8;
+}
+
 .parent-categories-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -34,6 +38,10 @@
 
 .category-chips .MuiChip-root:hover {
   background-color: #f0f0f0;
+}
+
+[data-theme='dark'] .category-chips .MuiChip-root:hover {
+  background-color: #333;
 }
 
 /* Responsive adjustments */

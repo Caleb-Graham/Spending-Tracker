@@ -22,6 +22,11 @@
 
 .spending-header h2 {
   margin: 0;
+  color: var(--text-primary, #333);
+}
+
+[data-theme='dark'] .spending-header h2 {
+  color: #e8e8e8;
 }
 
 .spending-table {
