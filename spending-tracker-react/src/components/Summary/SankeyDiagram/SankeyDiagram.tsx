@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3-selection';
+import { zoom, zoomIdentity } from 'd3-zoom';
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey';
-import { scaleOrdinal } from 'd3-scale';
-import { schemeCategory10 } from 'd3-scale-chromatic';
+import { useTheme } from '@mui/material/styles';
+import { Box, IconButton, Tooltip, Typography } from '@mui/material';
+import { ZoomIn, ZoomOut, CenterFocusStrong } from '@mui/icons-material';
 
 interface SankeyData {
   nodes: { id: string; name: string; category?: string }[];
@@ -23,6 +25,10 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
+  const [currentZoom, setCurrentZoom] = useState(1);
+  const zoomBehaviorRef = useRef<any>(null);
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
 
   // Update dimensions based on container size
   useEffect(() => {
@@ -94,8 +100,7 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
     const graph = sankeyGenerator(sankeyData as any);
     const { nodes, links } = graph;
 
-    // Color scale with specific colors for different node types
-    const color = scaleOrdinal(schemeCategory10);
+    // Color function for different node types
     const getNodeColor = (category: string) => {
       switch (category) {
         case 'income':
@@ -103,19 +108,39 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
         case 'intermediate':
           return '#2196F3'; // Blue for Available Money
         case 'expense-parent':
-          return '#FF9800'; // Orange for parent expense categories
         case 'expense-child':
-          return '#F44336'; // Red for individual expense categories
+          return '#FF9800'; // Orange for expense categories
         default:
-          return color(category);
+          return '#9E9E9E'; // Gray fallback
       }
     };
 
-    const g = svg
+    // Theme-aware colors
+    const linkColor = isDarkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)';
+    const linkHoverOpacity = isDarkMode ? 0.6 : 0.5;
+    const textColor = isDarkMode ? '#e0e0e0' : '#333';
+    const nodeStrokeColor = isDarkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+
+    // Set up zoom behavior
+    const zoomBehavior = zoom()
+      .scaleExtent([0.3, 4]) // Allow zoom from 30% to 400%
+      .on('zoom', (event: any) => {
+        g.attr('transform', event.transform);
+        setCurrentZoom(event.transform.k);
+      });
+    
+    zoomBehaviorRef.current = zoomBehavior;
+    
+    svg
       .attr("width", dimensions.width)
       .attr("height", dimensions.height)
       .attr("viewBox", `0 0 ${dimensions.width} ${dimensions.height}`)
       .attr("preserveAspectRatio", "xMidYMid meet")
+      .style("cursor", "grab")
+      .call(zoomBehavior as any)
+      .on("dblclick.zoom", null); // Disable double-click zoom
+    
+    const g = svg
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -125,12 +150,12 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
       .data(links)
       .join("path")
       .attr("d", sankeyLinkHorizontal())
-      .attr("stroke", "#aaa")
-      .attr("stroke-opacity", 0.5)
+      .attr("stroke", linkColor)
+      .attr("stroke-opacity", isDarkMode ? 0.5 : 0.4)
       .attr("stroke-width", (d: any) => Math.max(1, d.width))
       .attr("fill", "none")
       .on("mouseover", function(event, d: any) {
-        d3.select(this).attr("stroke-opacity", 0.8);
+        d3.select(this).attr("stroke-opacity", linkHoverOpacity);
         
         // Create tooltip
         const tooltip = d3.select("body").append("div")
@@ -165,7 +190,7 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
         .style("top", (event.pageY - 10) + "px");
       })
       .on("mouseout", function() {
-        d3.select(this).attr("stroke-opacity", 0.5);
+        d3.select(this).attr("stroke-opacity", isDarkMode ? 0.5 : 0.4);
         d3.selectAll(".sankey-tooltip").remove();
       });
 
@@ -180,8 +205,8 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
       .attr("y", (d: any) => d.y0)
       .attr("height", (d: any) => d.y1 - d.y0)
       .attr("width", (d: any) => d.x1 - d.x0)
-            .attr("fill", (d: any) => getNodeColor(d.category || d.name))
-      .attr("stroke", "#000")
+      .attr("fill", (d: any) => getNodeColor(d.category || d.name))
+      .attr("stroke", nodeStrokeColor)
       .attr("stroke-width", 0.5)
       .on("mouseover", function(event, d: any) {
         // Create tooltip
@@ -237,7 +262,7 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
       .attr("text-anchor", (d: any) => d.x0 < innerWidth / 2 ? "start" : "end")
       .attr("font-family", "sans-serif")
       .attr("font-size", `${Math.max(9, Math.min(12, innerWidth * 0.01))}px`) // Responsive font size
-      .attr("fill", "#333")
+      .attr("fill", textColor)
       .text((d: any) => {
         // Show shorter names for better readability based on available space
         const name = d.name;
@@ -250,28 +275,118 @@ const SankeyDiagram: React.FC<SankeyDiagramProps> = ({
       .append("title")
       .text((d: any) => d.name); // Full name on hover
 
-  }, [data, dimensions]); // Updated dependency to use dimensions instead of width/height
+  }, [data, dimensions, isDarkMode]); // Re-render on theme change
+
+  // Zoom control handlers
+  const handleZoomIn = () => {
+    if (svgRef.current && zoomBehaviorRef.current) {
+      const svg = d3.select(svgRef.current);
+      svg.transition().duration(300).call(
+        zoomBehaviorRef.current.scaleBy as any, 
+        1.3
+      );
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (svgRef.current && zoomBehaviorRef.current) {
+      const svg = d3.select(svgRef.current);
+      svg.transition().duration(300).call(
+        zoomBehaviorRef.current.scaleBy as any, 
+        0.7
+      );
+    }
+  };
+
+  const handleResetZoom = () => {
+    if (svgRef.current && zoomBehaviorRef.current) {
+      const svg = d3.select(svgRef.current);
+      svg.transition().duration(300).call(
+        zoomBehaviorRef.current.transform as any, 
+        zoomIdentity
+      );
+    }
+  };
 
   return (
-    <div 
+    <Box 
       ref={containerRef}
-      style={{ 
+      sx={{ 
         width: '100%', 
         height: '100%',
-        minHeight: '500px',
+        minHeight: '700px',
         display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center',
+        flexDirection: 'column',
+        position: 'relative',
         overflow: 'hidden'
       }}
     >
+      {/* Zoom Controls */}
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 16,
+          left: 16,
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 1,
+          backgroundColor: isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.95)',
+          borderRadius: 1.5,
+          padding: '8px 12px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title="Zoom Out" placement="right">
+            <IconButton size="small" onClick={handleZoomOut}>
+              <ZoomOut fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Typography variant="caption" sx={{ minWidth: 50, textAlign: 'center', fontWeight: 500 }}>
+            {Math.round(currentZoom * 100)}%
+          </Typography>
+          <Tooltip title="Zoom In" placement="right">
+            <IconButton size="small" onClick={handleZoomIn}>
+              <ZoomIn fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        <Tooltip title="Reset View" placement="right">
+          <IconButton size="small" onClick={handleResetZoom}>
+            <CenterFocusStrong fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+      
+      {/* Help text */}
+      <Typography 
+        variant="caption" 
+        sx={{ 
+          position: 'absolute', 
+          bottom: 16, 
+          right: 16, 
+          opacity: 0.5,
+          backgroundColor: isDarkMode ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)',
+          padding: '4px 12px',
+          borderRadius: 1,
+          fontSize: '0.75rem'
+        }}
+      >
+        Scroll to zoom • Drag to pan
+      </Typography>
+      
       <svg 
         ref={svgRef}
-        width={dimensions.width}
-        height={dimensions.height}
-        style={{ maxWidth: '100%', height: 'auto' }}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          flex: 1,
+          display: 'block'
+        }}
       ></svg>
-    </div>
+    </Box>
   );
 };
 

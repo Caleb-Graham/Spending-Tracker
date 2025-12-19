@@ -34,8 +34,6 @@ import {
   Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
-  Folder as FolderIcon,
-  FolderOpen as FolderOpenIcon,
   Label as LabelIcon,
   Warning as WarningIcon,
   DragIndicator as DragIcon
@@ -864,7 +862,6 @@ const Categories = () => {
                   setExpandedParents(new Set());
                 }
               }}
-              size="small"
               sx={{ 
                 '& .MuiToggleButton-root': {
                   textTransform: 'none',
@@ -905,9 +902,12 @@ const Categories = () => {
                 minWidth: 'auto',
                 p: 0,
                 color: 'text.secondary',
+                whiteSpace: 'nowrap',
+                textDecoration: 'none',
                 '&:hover': {
                   backgroundColor: 'transparent',
-                  color: 'primary.main'
+                  color: 'primary.main',
+                  textDecoration: 'underline'
                 }
               }}
             >

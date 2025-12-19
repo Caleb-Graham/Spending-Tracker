@@ -33,7 +33,7 @@ import { type Category, type CategoryMapping, type Scenario } from '../../servic
 import { getAllCategoryDataNeon } from '../../services/categoryService';
 import { getPlanningBudgetsNeon, savePlanningBudgetNeon, deletePlanningBudgetNeon } from '../../services/planningService';
 import { getScenariosNeon } from '../../services/scenarioService';
-import D3PieChart from '../D3PieChart/D3PieChart';
+import D3PieChart from '../Summary/PieChart/D3PieChart';
 import ScenarioManager from '../ScenarioManager/ScenarioManager';
 import './Planning.css';
 
