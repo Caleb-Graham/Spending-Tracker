@@ -11,14 +11,25 @@ import {
   Box,
   Typography,
   Tabs,
-  Tab
+  Tab,
+  ListItemIcon,
+  ListItemText,
+  Divider
 } from '@mui/material';
+import { 
+  DarkMode as DarkModeIcon, 
+  LightMode as LightModeIcon,
+  Settings as SettingsIcon,
+  Logout as LogoutIcon
+} from '@mui/icons-material';
+import { useThemeMode } from '../../context/ThemeContext';
 import './Header.css';
 
 const Header: React.FC = () => {
   const user = useUser();
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const { mode, toggleTheme } = useThemeMode();
 
   // Determine current tab based on location
   const getCurrentTab = () => {
@@ -107,8 +118,25 @@ const Header: React.FC = () => {
                   horizontal: 'right',
                 }}
               >
-                <MenuItem onClick={handleProfile}>Account Settings</MenuItem>
-                <MenuItem onClick={handleSignOut}>Sign Out</MenuItem>
+                <MenuItem onClick={() => { toggleTheme(); handleMenuClose(); }}>
+                  <ListItemIcon>
+                    {mode === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+                  </ListItemIcon>
+                  <ListItemText>{mode === 'dark' ? 'Light Mode' : 'Dark Mode'}</ListItemText>
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={handleProfile}>
+                  <ListItemIcon>
+                    <SettingsIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Account Settings</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleSignOut}>
+                  <ListItemIcon>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Sign Out</ListItemText>
+                </MenuItem>
               </Menu>
             </>
           )}

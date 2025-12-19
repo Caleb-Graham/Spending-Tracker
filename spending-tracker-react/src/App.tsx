@@ -9,6 +9,7 @@ import Categories from './components/Categories/Categories';
 import NetWorth from './components/NetWorth/NetWorth';
 import Planning from './components/Planning/Planning';
 import { stackClientApp } from './stack';
+import { ThemeProvider } from './context/ThemeContext';
 
 function HandlerRoutes() {
   const location = useLocation();
@@ -40,7 +41,9 @@ function App() {
       <Router>
         <StackProvider app={stackClientApp}>
           <StackTheme>
-            <AppContent />
+            <ThemeProvider>
+              <AppContent />
+            </ThemeProvider>
           </StackTheme>
         </StackProvider>
       </Router>

@@ -7,6 +7,22 @@
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark mode support for root elements */
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+[data-theme='dark'] body {
+  background-color: #121212;
+  color: #ffffff;
+}
+
+[data-theme='light'] body {
+  background-color: #f5f5f5;
+  color: #333333;
 }
 
 .main-content {
