@@ -321,6 +321,9 @@ const createAppTheme = (mode: ThemeMode): Theme => {
       },
       MuiButton: {
         styleOverrides: {
+          root: () => ({
+            textTransform: 'none',
+          }),
           outlined: ({ theme }) => ({
             borderColor: theme.palette.custom.borderDefault,
           }),

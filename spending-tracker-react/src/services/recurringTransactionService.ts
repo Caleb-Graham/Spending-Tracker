@@ -101,6 +101,30 @@ export const getRecurringTransactionsNeon = async (
   return (data || []).map(transformRecurringTransaction);
 };
 
+// Get a single recurring transaction by ID
+export const getRecurringTransactionByIdNeon = async (
+  recurringTransactionId: number,
+  accessToken: string
+): Promise<RecurringTransaction> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { data, error } = await pg
+    .from("RecurringTransactions")
+    .select("*")
+    .eq("RecurringTransactionId", recurringTransactionId)
+    .single();
+
+  if (error) {
+    throw new Error(error.message || "Failed to fetch recurring transaction");
+  }
+
+  if (!data) {
+    throw new Error("Recurring transaction not found");
+  }
+
+  return transformRecurringTransaction(data);
+};
+
 // Create a new recurring transaction
 export const createRecurringTransactionNeon = async (
   input: CreateRecurringTransactionInput,

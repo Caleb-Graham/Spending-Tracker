@@ -1,33 +1,14 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { Client } from "pg";
 
-// This cron job processes recurring transactions
-// It runs daily at 6 AM UTC and creates transactions for any recurring transactions
-// where NextRunAt <= now()
-
+// Manual trigger endpoint for testing recurring transactions
+// This is identical to the cron job but doesn't require authorization
+// REMOVE THIS IN PRODUCTION or add your own auth
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const startTime = Date.now();
   console.log(
-    `[CRON] Starting recurring transaction processing at ${new Date().toISOString()}`
+    `[MANUAL] Starting recurring transaction processing at ${new Date().toISOString()}`
   );
-
-  // Verify the request is from Vercel Cron (security)
-  const authHeader = req.headers.authorization;
-  const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
-
-  console.log(
-    `[CRON] Auth check - Has header: ${!!authHeader}, Has CRON_SECRET: ${!!process
-      .env.CRON_SECRET}`
-  );
-
-  if (authHeader !== expectedAuth) {
-    console.error(
-      `[CRON] Unauthorized request. Expected: ${
-        expectedAuth ? "PRESENT" : "MISSING"
-      }, Got: ${authHeader ? "PRESENT" : "MISSING"}`
-    );
-    return res.status(401).json({ error: "Unauthorized" });
-  }
 
   const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -39,12 +20,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const client = new Client({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Required for Neon
+    ssl: { rejectUnauthorized: false },
   });
 
   try {
     await client.connect();
-    console.log("Connected to database");
+    console.log("[MANUAL] Connected to database");
 
     // 1. Fetch all active recurring transactions where NextRunAt <= now
     const { rows: recurringTransactions } = await client.query(
@@ -52,15 +33,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     console.log(
-      `Found ${recurringTransactions.length} recurring transactions to process`
+      `[MANUAL] Found ${recurringTransactions.length} recurring transactions to process`
     );
 
     let processed = 0;
     let errors = 0;
+    const details: any[] = [];
 
     // 2. Process each recurring transaction
     for (const rt of recurringTransactions) {
       try {
+        console.log(
+          `[MANUAL] Processing transaction: ${JSON.stringify(rt, null, 2)}`
+        );
+
         // Start a transaction
         await client.query("BEGIN");
 
@@ -69,10 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `SET LOCAL "request.jwt.claims" = '{"sub":"${rt.UserId}"}'`
         );
 
-        // Create the actual transaction (UserId will use DEFAULT jwt_uid())
-        await client.query(
+        // Create the actual transaction
+        const { rows: created } = await client.query(
           `INSERT INTO "Transactions" ("Date", "Note", "Amount", "CategoryId", "RecurringTransactionId") 
-           VALUES ($1, $2, $3, $4, $5)`,
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
           [
             rt.NextRunAt,
             rt.Note,
@@ -82,12 +69,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ]
         );
 
+        console.log(
+          `[MANUAL] Created transaction: ${JSON.stringify(created[0], null, 2)}`
+        );
+
         // Calculate the next run date
         const nextRunAt = calculateNextRunAt(
           rt.NextRunAt,
           rt.Frequency,
           rt.Interval
         );
+
+        console.log(`[MANUAL] Next run at: ${nextRunAt.toISOString()}`);
 
         // Update the recurring transaction
         await client.query(
@@ -101,14 +94,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await client.query("COMMIT");
 
         processed++;
+        details.push({
+          id: rt.RecurringTransactionId,
+          note: rt.Note,
+          amount: rt.Amount,
+          nextRunAt: nextRunAt.toISOString(),
+          status: "success",
+          createdTransaction: created[0],
+        });
+
         console.log(
-          `Processed recurring transaction ${rt.RecurringTransactionId}`
+          `[MANUAL] Successfully processed recurring transaction ${rt.RecurringTransactionId}`
         );
       } catch (err) {
         await client.query("ROLLBACK");
         errors++;
+        details.push({
+          id: rt.RecurringTransactionId,
+          note: rt.Note,
+          amount: rt.Amount,
+          status: "error",
+          error: String(err),
+        });
         console.error(
-          `Error processing recurring transaction ${rt.RecurringTransactionId}:`,
+          `[MANUAL] Error processing recurring transaction ${rt.RecurringTransactionId}:`,
           err
         );
       }
@@ -121,11 +130,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       total: recurringTransactions.length,
       duration: Date.now() - startTime,
       timestamp: new Date().toISOString(),
+      details,
     });
   } catch (error) {
-    console.error("[CRON] Cron job failed:", error);
+    console.error("[MANUAL] Processing failed:", error);
     return res.status(500).json({
-      error: "Cron job failed",
+      error: "Processing failed",
       details: String(error),
       timestamp: new Date().toISOString(),
     });

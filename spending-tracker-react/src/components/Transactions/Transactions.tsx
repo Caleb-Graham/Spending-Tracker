@@ -15,6 +15,7 @@ import {
   TablePagination,
   Box,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Select,
   MenuItem,
@@ -27,7 +28,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Snackbar
+  Snackbar,
+  Switch
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -68,7 +70,12 @@ const Transactions = () => {
     date: '',
     note: '',
     amount: '',
-    categoryId: ''
+    categoryId: '',
+    isIncome: false,
+    isRecurring: false,
+    recurringFrequency: 'MONTHLY' as RecurringFrequency,
+    recurringInterval: 1,
+    recurringIsActive: true
   });
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState<{ message: string; severity: 'success' | 'error' } | null>(null);
@@ -322,13 +329,46 @@ const Transactions = () => {
     }
   };
 
-  const handleEditClick = (transaction: Transaction) => {
+  const handleEditClick = async (transaction: Transaction) => {
     setEditingTransaction(transaction);
+    
+    // If this is a recurring transaction, fetch its details
+    let recurringData = {
+      isRecurring: !!transaction.recurringTransactionId,
+      recurringFrequency: 'MONTHLY' as RecurringFrequency,
+      recurringInterval: 1,
+      recurringIsActive: true
+    };
+    
+    if (transaction.recurringTransactionId && user) {
+      try {
+        const authJson = await user.getAuthJson();
+        const accessToken = authJson.accessToken;
+        if (accessToken) {
+          const { getRecurringTransactionByIdNeon } = await import('../../services/recurringTransactionService');
+          const recurring = await getRecurringTransactionByIdNeon(
+            transaction.recurringTransactionId,
+            accessToken
+          );
+          recurringData = {
+            isRecurring: true,
+            recurringFrequency: recurring.frequency,
+            recurringInterval: recurring.interval,
+            recurringIsActive: recurring.isActive
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching recurring transaction details:', error);
+      }
+    }
+    
     setEditFormData({
       date: transaction.date.split('T')[0],
       note: transaction.note,
       amount: Math.abs(transaction.amount).toString(),
-      categoryId: transaction.category?.categoryId.toString() || ''
+      categoryId: transaction.category?.categoryId.toString() || '',
+      isIncome: transaction.isIncome,
+      ...recurringData
     });
     setEditDialogOpen(true);
   };
@@ -336,7 +376,17 @@ const Transactions = () => {
   const handleEditClose = () => {
     setEditDialogOpen(false);
     setEditingTransaction(null);
-    setEditFormData({ date: '', note: '', amount: '', categoryId: '' });
+    setEditFormData({ 
+      date: '', 
+      note: '', 
+      amount: '', 
+      categoryId: '',
+      isIncome: false,
+      isRecurring: false,
+      recurringFrequency: 'MONTHLY' as RecurringFrequency,
+      recurringInterval: 1,
+      recurringIsActive: true
+    });
   };
 
   const handleDeleteClick = async (transaction: Transaction) => {
@@ -456,16 +506,50 @@ const Transactions = () => {
         return;
       }
 
+      // Sign the amount based on whether it's income or expense
+      const signedAmount = editFormData.isIncome ? Math.abs(amount) : -Math.abs(amount);
+
       await updateTransactionNeon(
         editingTransaction.transactionId,
         {
           date: editFormData.date,
           note: editFormData.note,
-          amount: editFormData.amount ? amount : undefined,
+          amount: editFormData.amount ? signedAmount : undefined,
           categoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : null
         },
         accessToken
       );
+      
+      // Handle recurring transaction changes
+      if (editingTransaction.recurringTransactionId) {
+        if (editFormData.isRecurring) {
+          // Update recurring transaction properties
+          const { updateRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+          await updateRecurringTransactionNeon(
+            editingTransaction.recurringTransactionId,
+            {
+              frequency: editFormData.recurringFrequency,
+              interval: editFormData.recurringInterval,
+              isActive: editFormData.recurringIsActive
+            },
+            accessToken
+          );
+        } else {
+          // User turned off recurring - deactivate the recurring transaction and remove link
+          const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+          await deleteRecurringTransactionNeon(
+            editingTransaction.recurringTransactionId,
+            accessToken
+          );
+          
+          // Remove the RecurringTransactionId from this transaction
+          const pg = PostgrestClientFactory.createClient(accessToken);
+          await pg
+            .from('Transactions')
+            .update({ RecurringTransactionId: null })
+            .eq('TransactionId', editingTransaction.transactionId);
+        }
+      }
 
       setNotification({ message: 'Transaction updated successfully', severity: 'success' });
       handleEditClose();
@@ -845,7 +929,7 @@ const Transactions = () => {
                         maximumFractionDigits: 2 
                       })}
                     </TableCell>
-                    <TableCell>{transaction.isIncome ? 'INCOME' : 'EXPENSE'}</TableCell>
+                    <TableCell>{transaction.isIncome ? 'Income' : 'Expense'}</TableCell>
                     <TableCell align="right" sx={{ padding: '8px 4px' }}>
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
                         <IconButton
@@ -899,6 +983,15 @@ const Transactions = () => {
               onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              InputProps={{
+                sx: {
+                  '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                    filter: 'invert(1)',
+                    opacity: 0.7,
+                    cursor: 'pointer'
+                  }
+                }
+              }}
             />
             <TextField
               label="Description"
@@ -914,6 +1007,17 @@ const Transactions = () => {
               fullWidth
               inputProps={{ step: '0.01', min: '0' }}
             />
+            <FormControl fullWidth>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={editFormData.isIncome ? 'income' : 'expense'}
+                label="Type"
+                onChange={(e) => setEditFormData({ ...editFormData, isIncome: e.target.value === 'income' })}
+              >
+                <MenuItem value="expense">Expense</MenuItem>
+                <MenuItem value="income">Income</MenuItem>
+              </Select>
+            </FormControl>
             <FormControl fullWidth>
               <InputLabel>Category</InputLabel>
               <Select
@@ -931,6 +1035,56 @@ const Transactions = () => {
                 ))}
               </Select>
             </FormControl>
+            
+            {/* Recurring Transaction Section */}
+            {editingTransaction?.recurringTransactionId && (
+              <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={editFormData.isRecurring}
+                      onChange={(e) => setEditFormData({ ...editFormData, isRecurring: e.target.checked })}
+                    />
+                  }
+                  label="Recurring"
+                  sx={{ mb: editFormData.isRecurring ? 2 : 0 }}
+                />
+
+                {editFormData.isRecurring && (
+                  <>
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                      <InputLabel>Frequency</InputLabel>
+                      <Select
+                        value={editFormData.recurringFrequency}
+                        label="Frequency"
+                        onChange={(e) => setEditFormData({ 
+                          ...editFormData, 
+                          recurringFrequency: e.target.value as RecurringFrequency 
+                        })}
+                      >
+                        <MenuItem value="DAILY">Daily</MenuItem>
+                        <MenuItem value="WEEKLY">Weekly</MenuItem>
+                        <MenuItem value="MONTHLY">Monthly</MenuItem>
+                        <MenuItem value="YEARLY">Yearly</MenuItem>
+                      </Select>
+                    </FormControl>
+                    
+                    <TextField
+                      label="Interval"
+                      type="number"
+                      value={editFormData.recurringInterval}
+                      onChange={(e) => setEditFormData({ 
+                        ...editFormData, 
+                        recurringInterval: parseInt(e.target.value) || 1 
+                      })}
+                      fullWidth
+                      inputProps={{ min: 1 }}
+                      helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
+                    />
+                  </>
+                )}
+              </Box>
+            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={handleEditClose}>Cancel</Button>
@@ -988,6 +1142,15 @@ const Transactions = () => {
               onChange={(e) => setCreateFormData({ ...createFormData, date: e.target.value })}
               fullWidth
               InputLabelProps={{ shrink: true }}
+              InputProps={{
+                sx: {
+                  '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                    filter: 'invert(1)',
+                    opacity: 0.7,
+                    cursor: 'pointer'
+                  }
+                }
+              }}
             />
             <TextField
               label="Description"
@@ -1036,20 +1199,16 @@ const Transactions = () => {
 
             {/* Recurring Transaction Section */}
             <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
-                Recurring Transaction
-              </Typography>
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Recurring</InputLabel>
-                <Select
-                  value={createFormData.isRecurring ? 'yes' : 'no'}
-                  label="Recurring"
-                  onChange={(e) => setCreateFormData({ ...createFormData, isRecurring: e.target.value === 'yes' })}
-                >
-                  <MenuItem value="no">No</MenuItem>
-                  <MenuItem value="yes">Yes</MenuItem>
-                </Select>
-              </FormControl>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={createFormData.isRecurring}
+                    onChange={(e) => setCreateFormData({ ...createFormData, isRecurring: e.target.checked })}
+                  />
+                }
+                label="Recurring"
+                sx={{ mb: createFormData.isRecurring ? 2 : 0 }}
+              />
 
               {createFormData.isRecurring && (
                 <>
@@ -1068,22 +1227,14 @@ const Transactions = () => {
                   </FormControl>
 
                   <TextField
-                    label="Repeat Every"
+                    label="Interval"
                     type="number"
                     value={createFormData.recurringInterval}
                     onChange={(e) => setCreateFormData({ ...createFormData, recurringInterval: Math.max(1, parseInt(e.target.value) || 1) })}
                     fullWidth
                     inputProps={{ min: '1', max: '12' }}
-                    sx={{ mb: 2 }}
-                    helperText={`Repeat every ${createFormData.recurringInterval} ${createFormData.recurringFrequency.toLowerCase()}${createFormData.recurringInterval > 1 ? 's' : ''}`}
+                    helperText={`Every ${createFormData.recurringInterval} ${createFormData.recurringInterval === 1 ? createFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : createFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
                   />
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Starting {new Date(createFormData.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}, 
-                    this transaction will automatically repeat {createFormData.recurringFrequency.toLowerCase()}
-                    {createFormData.recurringInterval > 1 ? ` (every ${createFormData.recurringInterval})` : ''}.
-                    A cron job will create future transactions automatically.
-                  </Typography>
                 </>
               )}
             </Box>

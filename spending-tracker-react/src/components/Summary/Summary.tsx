@@ -638,7 +638,6 @@ const Summary = () => {
             }}
             sx={{
               '& .MuiToggleButton-root': {
-                textTransform: 'none',
                 borderRadius: 0,
                 border: 'none',
                 borderBottom: `2px solid transparent`,
@@ -679,7 +678,6 @@ const Summary = () => {
                   }
                 }}
                 sx={{ 
-                  textTransform: 'none', 
                   fontWeight: 400,
                   fontSize: '0.875rem',
                   minWidth: 'auto',

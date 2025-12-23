@@ -512,7 +512,6 @@ const UnassignedChildRow: React.FC<{
                 size="small"
                 variant="outlined"
                 onClick={() => onAssign(mapping.id, parent.categoryId)}
-                sx={{ textTransform: 'none' }}
               >
                 {parent.name}
               </Button>
@@ -845,7 +844,7 @@ const Categories = () => {
               startIcon={<AddIcon />}
               onClick={() => openDialog('parent', 'create')}
               size="medium"
-              sx={{ textTransform: 'none', fontWeight: 500 }}
+              sx={{ fontWeight: 500 }}
             >
               Add Category
             </Button>
@@ -864,7 +863,6 @@ const Categories = () => {
               }}
               sx={{ 
                 '& .MuiToggleButton-root': {
-                  textTransform: 'none',
                   fontWeight: 400,
                   border: 'none',
                   borderBottom: '2px solid transparent',
@@ -896,7 +894,6 @@ const Categories = () => {
               onClick={() => expandedParents.size > 0 ? collapseAll() : expandAll()}
               disabled={sortedParents.length === 0}
               sx={{ 
-                textTransform: 'none', 
                 fontWeight: 400,
                 fontSize: '0.875rem',
                 minWidth: 'auto',
