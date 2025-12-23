@@ -145,7 +145,7 @@ module.exports = async function handler(
   } finally {
     await client.end();
   }
-}
+};
 
 function calculateNextRunAt(
   currentNextRunAt: Date,

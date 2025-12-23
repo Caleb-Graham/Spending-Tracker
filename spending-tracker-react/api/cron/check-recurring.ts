@@ -1,4 +1,4 @@
-const { Client } = require("pg");
+import { Client } from "pg";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // Diagnostic endpoint to check recurring transactions status
