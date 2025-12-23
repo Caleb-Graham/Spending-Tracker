@@ -1,10 +1,15 @@
 /// <reference types="node" />
-const { Client } = require("pg");
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { Client } from "pg";
+const pg = require("pg");
 
 // Manual trigger endpoint for testing recurring transactions
 // This is identical to the cron job but doesn't require authorization
 // REMOVE THIS IN PRODUCTION or add your own auth
-module.exports = async function handler(_req, res) {
+module.exports = async function handler(
+  _req: VercelRequest,
+  res: VercelResponse
+) {
   const startTime = Date.now();
   console.log(
     `[MANUAL] Starting recurring transaction processing at ${new Date().toISOString()}`
@@ -18,7 +23,7 @@ module.exports = async function handler(_req, res) {
       .json({ error: "Missing DATABASE_URL environment variable" });
   }
 
-  const client = new Client({
+  const client: Client = new pg.Client({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
   });

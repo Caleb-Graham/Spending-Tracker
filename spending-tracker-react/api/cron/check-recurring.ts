@@ -1,9 +1,14 @@
 /// <reference types="node" />
-const { Client } = require("pg");
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { Client } from "pg";
+const pg = require("pg");
 
 // Diagnostic endpoint to check recurring transactions status
 // Call this manually to see what's pending
-module.exports = async function handler(_req, res) {
+module.exports = async function handler(
+  _req: VercelRequest,
+  res: VercelResponse
+) {
   console.log("[CHECK] Starting diagnostic check");
 
   const DATABASE_URL = process.env.DATABASE_URL;
@@ -19,18 +24,18 @@ module.exports = async function handler(_req, res) {
 
   try {
     console.log("[CHECK] Creating database client");
-    client = new Client({
+    client = new pg.Client({
       connectionString: DATABASE_URL,
       ssl: { rejectUnauthorized: false },
     });
 
     console.log("[CHECK] Connecting to database");
-    await client.connect();
+    await client!.connect();
     console.log("[CHECK] Connected successfully");
 
     // Get all recurring transactions
     console.log("[CHECK] Fetching all recurring transactions");
-    const { rows: allRecurring } = await client.query(
+    const { rows: allRecurring } = await client!.query(
       `SELECT 
         "RecurringTransactionId",
         "UserId",
@@ -49,7 +54,7 @@ module.exports = async function handler(_req, res) {
 
     // Get pending ones (NextRunAt <= now)
     console.log("[CHECK] Fetching pending recurring transactions");
-    const { rows: pending } = await client.query(
+    const { rows: pending } = await client!.query(
       `SELECT 
         "RecurringTransactionId",
         "UserId",
@@ -68,7 +73,7 @@ module.exports = async function handler(_req, res) {
 
     // Get last 10 cron-created transactions
     console.log("[CHECK] Fetching recent transactions");
-    const { rows: recentTransactions } = await client.query(
+    const { rows: recentTransactions } = await client!.query(
       `SELECT 
         t."TransactionId",
         t."Date",

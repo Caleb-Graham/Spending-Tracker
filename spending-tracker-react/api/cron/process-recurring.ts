@@ -1,11 +1,16 @@
 /// <reference types="node" />
-const { Client } = require("pg");
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { Client } from "pg";
+const pg = require("pg");
 
 // This cron job processes recurring transactions
 // It runs daily at 6 AM UTC and creates transactions for any recurring transactions
 // where NextRunAt <= now()
 
-module.exports = async function handler(req, res) {
+module.exports = async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
   const startTime = Date.now();
   console.log(
     `[CRON] Starting recurring transaction processing at ${new Date().toISOString()}`
@@ -37,7 +42,7 @@ module.exports = async function handler(req, res) {
       .json({ error: "Missing DATABASE_URL environment variable" });
   }
 
-  const client = new Client({
+  const client: Client = new pg.Client({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false }, // Required for Neon
   });
