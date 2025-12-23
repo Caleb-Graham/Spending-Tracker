@@ -1,14 +1,11 @@
+/// <reference types="node" />
 const { Client } = require("pg");
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // This cron job processes recurring transactions
 // It runs daily at 6 AM UTC and creates transactions for any recurring transactions
 // where NextRunAt <= now()
 
-module.exports = async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+module.exports = async function handler(req, res) {
   const startTime = Date.now();
   console.log(
     `[CRON] Starting recurring transaction processing at ${new Date().toISOString()}`
