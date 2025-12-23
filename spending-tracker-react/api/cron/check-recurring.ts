@@ -1,11 +1,11 @@
 /// <reference types="node" />
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { Client } from "pg";
-const pg = require("pg");
+import pg from "pg";
 
 // Diagnostic endpoint to check recurring transactions status
 // Call this manually to see what's pending
-module.exports = async function handler(
+export default async function handler(
   _req: VercelRequest,
   res: VercelResponse
 ) {
@@ -123,4 +123,4 @@ module.exports = async function handler(
       await client.end();
     }
   }
-};
+}
