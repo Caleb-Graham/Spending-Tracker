@@ -5,7 +5,7 @@ import { Client } from "pg";
 // Call this manually to see what's pending
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log("[CHECK] Starting diagnostic check");
-  
+
   const DATABASE_URL = process.env.DATABASE_URL;
 
   if (!DATABASE_URL) {
@@ -81,7 +81,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        ORDER BY t."CreatedAt" DESC
        LIMIT 10`
     );
-    console.log(`[CHECK] Found ${recentTransactions.length} recent transactions`);
+    console.log(
+      `[CHECK] Found ${recentTransactions.length} recent transactions`
+    );
 
     const response = {
       success: true,
@@ -101,14 +103,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(response);
   } catch (error) {
     console.error("[CHECK] Error occurred:", error);
-    console.error("[CHECK] Error stack:", error instanceof Error ? error.stack : "N/A");
-    return res
-      .status(500)
-      .json({ 
-        error: "Diagnostic failed", 
-        details: String(error),
-        message: error instanceof Error ? error.message : "Unknown error"
-      });
+    console.error(
+      "[CHECK] Error stack:",
+      error instanceof Error ? error.stack : "N/A"
+    );
+    return res.status(500).json({
+      error: "Diagnostic failed",
+      details: String(error),
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
   } finally {
     if (client) {
       console.log("[CHECK] Closing database connection");
