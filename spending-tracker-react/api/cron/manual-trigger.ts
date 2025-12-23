@@ -1,10 +1,13 @@
+const { Client } = require("pg");
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { Client } from "pg";
 
 // Manual trigger endpoint for testing recurring transactions
 // This is identical to the cron job but doesn't require authorization
 // REMOVE THIS IN PRODUCTION or add your own auth
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+module.exports = async function handler(
+  _req: VercelRequest,
+  res: VercelResponse
+) {
   const startTime = Date.now();
   console.log(
     `[MANUAL] Starting recurring transaction processing at ${new Date().toISOString()}`

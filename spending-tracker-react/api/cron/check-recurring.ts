@@ -1,9 +1,12 @@
+const { Client } = require("pg");
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { Client } from "pg";
 
 // Diagnostic endpoint to check recurring transactions status
 // Call this manually to see what's pending
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+module.exports = async function handler(
+  _req: VercelRequest,
+  res: VercelResponse
+) {
   console.log("[CHECK] Starting diagnostic check");
 
   const DATABASE_URL = process.env.DATABASE_URL;
@@ -118,8 +121,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await client.end();
     }
   }
-}
-
-export const config = {
-  runtime: "nodejs",
 };
