@@ -16,7 +16,8 @@ import {
   Chip,
   Tooltip,
   Alert,
-  Snackbar
+  Snackbar,
+  useTheme
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -46,6 +47,7 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
   onScenariosUpdated
 }) => {
   const user = useUser();
+  const theme = useTheme();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
@@ -214,13 +216,19 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
               <ListItem
                 key={scenario.scenarioId}
                 sx={{
-                  border: scenario.scenarioId === currentScenarioId ? '2px solid #1976d2' : '1px solid #e0e0e0',
+                  border: scenario.scenarioId === currentScenarioId 
+                    ? `2px solid ${theme.palette.primary.main}` 
+                    : `1px solid ${theme.palette.custom.borderDefault}`,
                   borderRadius: 1,
                   mb: 1,
-                  backgroundColor: scenario.scenarioId === currentScenarioId ? '#f3f7ff' : 'inherit',
+                  backgroundColor: scenario.scenarioId === currentScenarioId 
+                    ? theme.palette.custom.surfaceSelected 
+                    : 'inherit',
                   cursor: 'pointer',
                   '&:hover': {
-                    backgroundColor: scenario.scenarioId === currentScenarioId ? '#f3f7ff' : '#f5f5f5'
+                    backgroundColor: scenario.scenarioId === currentScenarioId 
+                      ? theme.palette.custom.surfaceSelected 
+                      : theme.palette.custom.surfaceHover
                   }
                 }}
                 onClick={() => onScenarioChange(scenario)}

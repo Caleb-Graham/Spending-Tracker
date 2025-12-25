@@ -9,9 +9,7 @@ import {
   MenuItem,
   Alert,
   Snackbar,
-  Card,
-  CardContent,
-  CardHeader,
+  Paper,
   InputAdornment,
   LinearProgress,
   Collapse,
@@ -446,7 +444,8 @@ const Planning = () => {
   };
 
   const calculateTotals = () => {
-    // Calculate income from both parent level and child level (always use yearly amounts for totals)
+    // Calculate income from both parent level and child level
+    // All planning data is stored as monthly amounts internally
     const incomeFromParents = incomeParents.reduce((sum, parent) => {
       const parentMonthlyAmount = parentPlanningData[parent.categoryId]?.plannedAmount || 0;
       const calculatedFromChildren = getParentAmountFromChildren(parent.categoryId);
@@ -454,7 +453,7 @@ const Planning = () => {
       
       // Use manual amount if set, otherwise use calculated amount from children
       const effectiveAmount = hasManualAmount ? parentMonthlyAmount : calculatedFromChildren;
-      return sum + (effectiveAmount * 12); // Convert to yearly
+      return sum + effectiveAmount;
     }, 0);
     
     const incomeFromChildren = categoryMappings
@@ -474,15 +473,15 @@ const Planning = () => {
       })
       .reduce((sum, mapping) => {
         const monthlyAmount = planningData[mapping.categoryId]?.plannedAmount || 0;
-        return sum + (monthlyAmount * 12); // Convert to yearly
+        return sum + monthlyAmount;
       }, 0);
 
     const incomeFromStandalone = getStandaloneCategories('Income').reduce((sum, category) => {
       const monthlyAmount = planningData[category.categoryId]?.plannedAmount || 0;
-      return sum + (monthlyAmount * 12); // Convert to yearly
+      return sum + monthlyAmount;
     }, 0);
 
-    // Calculate expenses from both parent level and child level (always use yearly amounts for totals)
+    // Calculate expenses from both parent level and child level
     const expensesFromParents = expenseParents.reduce((sum, parent) => {
       const parentMonthlyAmount = parentPlanningData[parent.categoryId]?.plannedAmount || 0;
       const calculatedFromChildren = getParentAmountFromChildren(parent.categoryId);
@@ -490,7 +489,7 @@ const Planning = () => {
       
       // Use manual amount if set, otherwise use calculated amount from children
       const effectiveAmount = hasManualAmount ? parentMonthlyAmount : calculatedFromChildren;
-      return sum + (effectiveAmount * 12); // Convert to yearly
+      return sum + effectiveAmount;
     }, 0);
     
     const expensesFromChildren = categoryMappings
@@ -510,16 +509,21 @@ const Planning = () => {
       })
       .reduce((sum, mapping) => {
         const monthlyAmount = planningData[mapping.categoryId]?.plannedAmount || 0;
-        return sum + (monthlyAmount * 12); // Convert to yearly
+        return sum + monthlyAmount;
       }, 0);
 
     const expensesFromStandalone = getStandaloneCategories('Expense').reduce((sum, category) => {
       const monthlyAmount = planningData[category.categoryId]?.plannedAmount || 0;
-      return sum + (monthlyAmount * 12); // Convert to yearly
+      return sum + monthlyAmount;
     }, 0);
 
-    const totalIncome = incomeFromParents + incomeFromChildren + incomeFromStandalone;
-    const totalExpenses = expensesFromParents + expensesFromChildren + expensesFromStandalone;
+    // Totals are in monthly amounts - convert based on view mode
+    const totalIncomeMonthly = incomeFromParents + incomeFromChildren + incomeFromStandalone;
+    const totalExpensesMonthly = expensesFromParents + expensesFromChildren + expensesFromStandalone;
+    
+    // Convert to display amounts based on view mode
+    const totalIncome = getDisplayAmount(totalIncomeMonthly);
+    const totalExpenses = getDisplayAmount(totalExpensesMonthly);
     const budgetAllocationPercentage = totalIncome > 0 ? (totalExpenses / totalIncome) * 100 : 0;
 
     return {
@@ -668,7 +672,7 @@ const Planning = () => {
     return manualAmount > 0;
   };
 
-  // Helper function to get category amount and percentage
+  // Helper function to get category amount and percentage (respects current view mode)
   const getCategoryAmountAndPercentage = (categoryId: number, type: string, isParent: boolean = false) => {
     let monthlyAmount = 0;
     if (isParent) {
@@ -680,26 +684,27 @@ const Planning = () => {
       monthlyAmount = planningData[categoryId]?.plannedAmount || 0;
     }
     
-    const yearlyAmount = monthlyAmount * 12;
+    // Convert to display amount based on current view mode
+    const displayAmount = getDisplayAmount(monthlyAmount);
     const { totalIncome, totalExpenses } = calculateTotals();
     const total = type === 'Income' ? totalIncome : totalExpenses;
-    const percentage = total > 0 ? (yearlyAmount / total) * 100 : 0;
+    const percentage = total > 0 ? (displayAmount / total) * 100 : 0;
     
-    return { yearlyAmount, percentage };
+    return { displayAmount, percentage };
   };
 
-  // Helper function to get pie chart data for expenses
+  // Helper function to get pie chart data for expenses (respects current view mode)
   const getPieChartData = () => {
     const expenseData: Array<{categoryId: number, categoryName: string, amount: number, percentage: number}> = [];
 
     // Add parent categories
     expenseParents.forEach(parent => {
-      const { yearlyAmount, percentage } = getCategoryAmountAndPercentage(parent.categoryId, parent.type, true);
-      if (yearlyAmount > 0) {
+      const { displayAmount, percentage } = getCategoryAmountAndPercentage(parent.categoryId, parent.type, true);
+      if (displayAmount > 0) {
         expenseData.push({
           categoryId: parent.categoryId,
           categoryName: parent.name,
-          amount: yearlyAmount,
+          amount: displayAmount,
           percentage: percentage
         });
       }
@@ -708,12 +713,12 @@ const Planning = () => {
     // Add standalone categories
     const standaloneExpenses = getStandaloneCategories('Expense');
     standaloneExpenses.forEach(category => {
-      const { yearlyAmount, percentage } = getCategoryAmountAndPercentage(category.categoryId, category.type, false);
-      if (yearlyAmount > 0) {
+      const { displayAmount, percentage } = getCategoryAmountAndPercentage(category.categoryId, category.type, false);
+      if (displayAmount > 0) {
         expenseData.push({
           categoryId: category.categoryId,
           categoryName: category.name,
-          amount: yearlyAmount,
+          amount: displayAmount,
           percentage: percentage
         });
       }
@@ -1003,7 +1008,7 @@ const Planning = () => {
   };
 
   // Render organized category sections
-  const renderOrganizedCategories = (type: string, title: string, cardColor: string) => {
+  const renderOrganizedCategories = (type: string, title: string) => {
     const parentCats = parentCategories.filter(cat => 
       cat.type === type && 
       cat.name.toLowerCase() !== 'unassigned'
@@ -1018,23 +1023,38 @@ const Planning = () => {
       .sort((a, b) => b.percentage - a.percentage);
     
     const standaloneCats = getStandaloneCategories(type);
+    const isIncome = type === 'Income';
     
     return (
-      <Card sx={{ mb: 2 }}> {/* Reduced margin */}
-        <CardHeader 
-          title={title}
+      <Paper 
+        sx={{ 
+          mb: 2,
+          overflow: 'hidden'
+        }}
+      >
+        <Box 
           sx={{ 
-            backgroundColor: cardColor,
-            color: 'white',
-            py: 1.5, // Reduced padding
-            '& .MuiCardHeader-title': { fontSize: '1.1rem', fontWeight: 'bold' } // Smaller font
+            px: 2, 
+            py: 1.5, 
+            borderBottom: `1px solid ${theme.palette.custom.borderDefault}`,
+            backgroundColor: theme.palette.elevation.dp2
           }}
-        />
-        <CardContent sx={{ py: 1.5 }}> {/* Reduced padding */}
+        >
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+              fontWeight: 'bold',
+              color: isIncome ? theme.palette.custom.incomeText : theme.palette.custom.expenseText
+            }}
+          >
+            {title}
+          </Typography>
+        </Box>
+        <Box sx={{ p: 2 }}>
           {sortedParentCats.map(parent => renderParentCategorySection(parent))}
           {renderStandaloneCategories(standaloneCats)}
-        </CardContent>
-      </Card>
+        </Box>
+      </Paper>
     );
   };
 
@@ -1050,18 +1070,16 @@ const Planning = () => {
 
   return (
     <div className="planning-container">
-      <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+      {/* Page Header */}
+      <div className="planning-page-header">
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
           <Box>
             <Typography variant="h4" component="h1" gutterBottom>
               Planning
             </Typography>
             {/* Scenario Selector */}
             {scenarios.length > 0 && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Scenario:
-                </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <FormControl size="small" sx={{ minWidth: 200 }}>
                   <Select
                     value={currentScenario?.scenarioId || ''}
@@ -1094,184 +1112,230 @@ const Planning = () => {
                     ))}
                   </Select>
                 </FormControl>
-                <Button
-                  variant="outlined"
+                <IconButton
                   size="small"
-                  startIcon={<SettingsIcon />}
                   onClick={() => setShowScenarioManager(true)}
+                  sx={{ color: 'text.secondary' }}
                 >
-                  Manage
-                </Button>
+                  <SettingsIcon fontSize="small" />
+                </IconButton>
               </Box>
             )}
             
             {/* Create First Scenario Button */}
             {scenarios.length === 0 && (
-              <Box sx={{ textAlign: 'center', mb: 3 }}>
-                <Button
-                  variant="contained"
-                  startIcon={<SettingsIcon />}
-                  onClick={() => setShowScenarioManager(true)}
-                >
-                  Create Your First Scenario
-                </Button>
-              </Box>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<SettingsIcon />}
+                onClick={() => setShowScenarioManager(true)}
+              >
+                Create Scenario
+              </Button>
             )}
           </Box>
           
-          {/* View Mode Toggle */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button
-              variant={viewMode === 'weekly' ? 'contained' : 'outlined'}
-              size="small"
-              onClick={() => setViewMode('weekly')}
-              sx={{ minWidth: 70 }}
-            >
-              Weekly
-            </Button>
-            <Button
-              variant={viewMode === 'monthly' ? 'contained' : 'outlined'}
-              size="small"
-              onClick={() => setViewMode('monthly')}
-              sx={{ minWidth: 70 }}
-            >
-              Monthly
-            </Button>
-            <Button
-              variant={viewMode === 'yearly' ? 'contained' : 'outlined'}
-              size="small"
-              onClick={() => setViewMode('yearly')}
-              sx={{ minWidth: 70 }}
-            >
-              Yearly
-            </Button>
+          {/* View Mode Toggle & Actions */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              border: `1px solid ${theme.palette.custom.borderDefault}`,
+              borderRadius: 1,
+              overflow: 'hidden'
+            }}>
+              {['weekly', 'monthly', 'yearly'].map((mode) => (
+                <Button
+                  key={mode}
+                  variant={viewMode === mode ? 'contained' : 'text'}
+                  size="small"
+                  onClick={() => setViewMode(mode as 'weekly' | 'monthly' | 'yearly')}
+                  sx={{ 
+                    minWidth: 70,
+                    borderRadius: 0,
+                    textTransform: 'capitalize'
+                  }}
+                >
+                  {mode}
+                </Button>
+              ))}
+            </Box>
             <Button
               variant="contained"
-              color="success"
+              color="primary"
               size="small"
               onClick={handleSaveAll}
-              sx={{ ml: 2 }}
             >
-              Save Changes
+              Save
             </Button>
           </Box>
         </Box>
-      </Box>
+      </div>
 
       {/* Show budget editor only when there's an active scenario */}
       {currentScenario ? (
         <>
-          {/* Summary Card */}
-          <Card 
-        sx={{ 
-          mb: 2, 
-          cursor: 'pointer',
-          transition: 'all 0.2s ease',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: 3
-          }
-        }}
-        onClick={() => setShowPieChart(true)}
-      >
-        <CardHeader 
-          title={`${currentYear} Annual Budget Summary`}
-          action={
-            <IconButton size="small" sx={{ color: 'white' }}>
-              <PieChartIcon />
-            </IconButton>
-          }
-          sx={{ 
-            backgroundColor: theme.palette.primary.dark,
-            color: 'white',
-            py: 1.5, // Reduced padding
-            '& .MuiCardHeader-title': { fontSize: '1.1rem', fontWeight: 'bold' }
-          }}
-        />
-        <CardContent sx={{ py: 2 }}> {/* Reduced padding */}
-          <Box 
+          {/* Summary Section */}
+          <Paper 
+            className="planning-summary-section"
             sx={{ 
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', // Smaller min width
-              gap: 2, // Reduced gap
-              mb: 2 // Reduced margin
+              p: 2,
+              mb: 3, 
+              cursor: 'pointer',
+              transition: 'box-shadow 0.2s ease',
+              '&:hover': { boxShadow: 2 }
             }}
+            onClick={() => setShowPieChart(true)}
           >
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
-                Total Income: <span style={{ color: '#4CAF50' }}>${totalIncome.toLocaleString()}</span>
+            <Box className="planning-summary-header">
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+                {currentYear} {viewMode === 'monthly' ? 'Monthly' : viewMode === 'yearly' ? 'Annual' : 'Weekly'} Budget
               </Typography>
+              <IconButton size="small" sx={{ color: 'text.secondary' }}>
+                <PieChartIcon fontSize="small" />
+              </IconButton>
             </Box>
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
-                Total Expenses: <span style={{ color: '#F44336' }}>${totalExpenses.toLocaleString()}</span>
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
-                Net Amount: <span style={{ color: netAmount >= 0 ? '#4CAF50' : '#F44336' }}>${netAmount.toLocaleString()}</span>
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
-                Allocation: <span style={{ 
-                  color: budgetAllocationPercentage > 100 ? '#F44336' : 
-                         budgetAllocationPercentage > 90 ? '#FF9800' : 
-                         'text.primary'
-                }}>{budgetAllocationPercentage.toFixed(1)}%</span>
-              </Typography>
-            </Box>
-          </Box>
-
-          {/* Compact Budget Allocation Progress */}
-          {totalIncome > 0 && (
-            <Box sx={{ mb: 1 }}>
-              <LinearProgress
-                variant="determinate"
-                value={Math.min(budgetAllocationPercentage, 100)}
-                sx={{
-                  height: 8, // Smaller height
-                  borderRadius: 4,
-                  backgroundColor: '#e0e0e0',
-                  '& .MuiLinearProgress-bar': {
-                    borderRadius: 4,
-                    backgroundColor: budgetAllocationPercentage > 100 ? '#F44336' : 
-                                   budgetAllocationPercentage > 90 ? '#FF9800' : 
-                                   '#4CAF50'
-                  }
+            
+            <Box className="planning-summary-grid">
+              <Paper 
+                elevation={0}
+                sx={{ 
+                  p: 1.5, 
+                  textAlign: 'center',
+                  backgroundColor: theme.palette.custom.incomeBackground,
+                  border: `1px solid ${theme.palette.custom.incomeText}`,
+                  borderRadius: 1
                 }}
-              />
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Income
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: theme.palette.custom.incomeText }}>
+                  ${totalIncome.toLocaleString()}
+                </Typography>
+              </Paper>
+              <Paper 
+                elevation={0}
+                sx={{ 
+                  p: 1.5, 
+                  textAlign: 'center',
+                  backgroundColor: `${theme.palette.custom.expenseText}12`,
+                  border: `1px solid ${theme.palette.custom.expenseText}`,
+                  borderRadius: 1
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Expenses
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: theme.palette.custom.expenseText }}>
+                  ${totalExpenses.toLocaleString()}
+                </Typography>
+              </Paper>
+              <Paper 
+                elevation={0}
+                sx={{ 
+                  p: 1.5, 
+                  textAlign: 'center',
+                  backgroundColor: netAmount >= 0 
+                    ? theme.palette.custom.incomeBackground 
+                    : `${theme.palette.custom.expenseText}12`,
+                  border: `1px solid ${netAmount >= 0 ? theme.palette.custom.incomeText : theme.palette.custom.expenseText}`,
+                  borderRadius: 1
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Net
+                </Typography>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    fontWeight: 'bold', 
+                    color: netAmount >= 0 ? theme.palette.custom.incomeText : theme.palette.custom.expenseText 
+                  }}
+                >
+                  ${netAmount.toLocaleString()}
+                </Typography>
+              </Paper>
+              <Paper 
+                elevation={0}
+                sx={{ 
+                  p: 1.5, 
+                  textAlign: 'center',
+                  backgroundColor: theme.palette.elevation.dp2,
+                  border: `1px solid ${theme.palette.custom.borderDefault}`,
+                  borderRadius: 1
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Allocated
+                </Typography>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    fontWeight: 'bold',
+                    color: budgetAllocationPercentage > 100 
+                      ? theme.palette.error.main 
+                      : budgetAllocationPercentage > 90 
+                        ? theme.palette.warning.main 
+                        : 'text.primary'
+                  }}
+                >
+                  {budgetAllocationPercentage.toFixed(1)}%
+                </Typography>
+              </Paper>
             </Box>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Income Categories */}
-      {incomeParents.length > 0 || getStandaloneCategories('Income').length > 0 ? 
-        renderOrganizedCategories('Income', 'Income Categories', '#616161') :
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          No income categories found. Please add some categories first.
-        </Typography>
-      }
+            {/* Budget Allocation Progress */}
+            {totalIncome > 0 && (
+              <Box className="planning-progress-container">
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.min(budgetAllocationPercentage, 100)}
+                  sx={{
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: theme.palette.action.disabledBackground,
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 3,
+                      backgroundColor: budgetAllocationPercentage > 100 
+                        ? theme.palette.error.main 
+                        : budgetAllocationPercentage > 90 
+                          ? theme.palette.warning.main 
+                          : theme.palette.success.main
+                    }
+                  }}
+                />
+              </Box>
+            )}
+          </Paper>
 
-      {/* Expense Categories */}
-      {expenseParents.length > 0 || getStandaloneCategories('Expense').length > 0 ? 
-        renderOrganizedCategories('Expense', 'Expense Categories', '#616161') :
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          No expense categories found. Please add some categories first.
-        </Typography>
-      }
+          {/* Income Categories */}
+          {incomeParents.length > 0 || getStandaloneCategories('Income').length > 0 ? 
+            renderOrganizedCategories('Income', 'Income') :
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              No income categories found. Please add some categories first.
+            </Typography>
+          }
 
-      {/* Action Buttons */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-        <Button
-          variant="outlined"
-          onClick={handleClearAll}
-          disabled={loading}
-        >
-          Clear All
-        </Button>
-      </Box>
+          {/* Expense Categories */}
+          {expenseParents.length > 0 || getStandaloneCategories('Expense').length > 0 ? 
+            renderOrganizedCategories('Expense', 'Expenses') :
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              No expense categories found. Please add some categories first.
+            </Typography>
+          }
+
+          {/* Action Buttons */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleClearAll}
+              disabled={loading}
+              color="error"
+            >
+              Clear All
+            </Button>
+          </Box>
 
       {/* Success Message */}
       <Snackbar
@@ -1303,7 +1367,7 @@ const Planning = () => {
         fullWidth
       >
         <DialogTitle sx={{ textAlign: 'center', fontWeight: 'bold' }}>
-          Expense Breakdown by Category
+          {viewMode === 'monthly' ? 'Monthly' : viewMode === 'yearly' ? 'Annual' : 'Weekly'} Expense Breakdown
         </DialogTitle>
         <DialogContent>
           {getPieChartData().length > 0 ? (
