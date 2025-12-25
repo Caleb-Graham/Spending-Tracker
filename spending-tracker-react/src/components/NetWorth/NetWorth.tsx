@@ -20,7 +20,8 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  useTheme
+  useTheme,
+  TablePagination
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -41,8 +42,7 @@ import {
 } from '../../services';
 import { useDateRange } from '../../hooks/useDateRange';
 import DateRangeSelector from '../shared/DateRangeSelector';
-import AccountManager from './AccountManager';
-import CategoryManager from './CategoryManager';
+import SettingsManager from './SettingsManager';
 import './NetWorth.css';
 
 const NetWorth: React.FC = () => {
@@ -60,8 +60,11 @@ const NetWorth: React.FC = () => {
   const [_allAccounts, _setAllAccounts] = useState<NetWorthAccountWithId[]>([]);
   const accountTimeSeries: any[] = [];
   const isLoadingAccountData = false;
-  const [accountManagerOpen, setAccountManagerOpen] = useState(false);
-  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [settingsManagerOpen, setSettingsManagerOpen] = useState(false);
+  
+  // Pagination state for historical snapshots
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   
   // Add snapshot modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -151,11 +154,11 @@ const NetWorth: React.FC = () => {
     }
   };
 
-  const handleAccountManagerClose = () => {
-    setAccountManagerOpen(false);
+  const handleSettingsManagerClose = () => {
+    setSettingsManagerOpen(false);
   };
 
-  const handleAccountsChanged = async () => {
+  const handleSettingsChanged = async () => {
     if (user) {
       const authJson = await user.getAuthJson();
       if (authJson.accessToken) {
@@ -163,6 +166,15 @@ const NetWorth: React.FC = () => {
         await loadAccountTemplates(authJson.accessToken);
       }
     }
+  };
+
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
   const loadAccountTemplates = async (accessToken: string) => {
@@ -530,45 +542,39 @@ const NetWorth: React.FC = () => {
             showDatePickers={true}
             size="small"
           />
-          <Button
-            variant="outlined"
-            startIcon={<SettingsIcon />}
-            onClick={() => setCategoryManagerOpen(true)}
-            size="small"
-          >
-            Manage Categories
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<SettingsIcon />}
-            onClick={() => setAccountManagerOpen(true)}
-            size="small"
-          >
-            Manage Accounts
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={async () => {
-              // Ensure we have account templates before opening modal
-              if (accountTemplates.length === 0) {
-                if (user) {
-                  const authJson = await user.getAuthJson();
-                  if (authJson.accessToken) {
-                    await loadAccountTemplates(authJson.accessToken);
+          <Box display="flex" gap={2} ml="auto">
+            <Button
+              variant="outlined"
+              startIcon={<SettingsIcon />}
+              onClick={() => setSettingsManagerOpen(true)}
+              size="small"
+            >
+              Configure
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={async () => {
+                // Ensure we have account templates before opening modal
+                if (accountTemplates.length === 0) {
+                  if (user) {
+                    const authJson = await user.getAuthJson();
+                    if (authJson.accessToken) {
+                      await loadAccountTemplates(authJson.accessToken);
+                    }
                   }
                 }
-              }
-              // Reset the form with all account templates set to 0, filtering out archived accounts
-              const activeTemplates = accountTemplates.filter(t => !t.isArchived);
-              setNewSnapshotAssets(activeTemplates.map(template => ({ ...template, value: 0 })));
-              setInputValues({});
-              setIsAddModalOpen(true);
-            }}
-            size="small"
-          >
-            Add Snapshot
-          </Button>
+                // Reset the form with all account templates set to 0, filtering out archived accounts
+                const activeTemplates = accountTemplates.filter(t => !t.isArchived);
+                setNewSnapshotAssets(activeTemplates.map(template => ({ ...template, value: 0 })));
+                setInputValues({});
+                setIsAddModalOpen(true);
+              }}
+              size="small"
+            >
+              Add Snapshot
+            </Button>
+          </Box>
         </div>
       </div>
 
@@ -677,171 +683,173 @@ const NetWorth: React.FC = () => {
         </Paper>
       </Box>
 
-      {/* Details Section */}
+      {/* Selected Snapshot View - Merged Recap and Breakdown */}
       {selectedSnapshot && (
-        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginTop: '24px' }}>
-          {/* Snapshot Info */}
-          <div style={{ flex: '0 0 350px' }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
+        <Paper className="selected-snapshot-section" style={{ padding: '24px', marginTop: '24px' }}>
+          {/* Snapshot Header - Month Recap */}
+          <Box className="snapshot-header" display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2} mb={3}>
+            <Box display="flex" alignItems="center" gap={3} flexWrap="wrap">
+              <Box>
+                <Typography variant="h5" fontWeight="bold" gutterBottom>
                   {format(new Date(selectedSnapshot.date), 'MMMM yyyy')}
                 </Typography>
-                <Typography variant="h4" color="primary" gutterBottom>
+                <Typography variant="h4" color="primary" fontWeight="bold">
                   {formatCurrency(selectedSnapshot.netWorth || 0)}
                 </Typography>
-                {selectedSnapshot.percentageChange !== null && selectedSnapshot.percentageChange !== undefined && (
-                  <Box display="flex" alignItems="center" gap={1} mb={1}>
-                    <Chip
-                      label={`${selectedSnapshot.percentageChange > 0 ? '+' : ''}${selectedSnapshot.percentageChange.toFixed(2)}%`}
-                      color={selectedSnapshot.percentageChange >= 0 ? 'success' : 'error'}
-                      size="small"
-                    />
-                    {selectedSnapshot.dollarChange !== null && selectedSnapshot.dollarChange !== undefined && (
-                      <Typography variant="body2" color="textSecondary">
-                        ({selectedSnapshot.dollarChange > 0 ? '+' : ''}{formatCurrency(selectedSnapshot.dollarChange)})
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-                {selectedSnapshot.notes && (
-                  <Typography variant="body2" color="textSecondary" style={{ marginTop: '8px' }}>
-                    {selectedSnapshot.notes}
-                  </Typography>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Snapshot Selector */}
-          <div style={{ flex: '1', minWidth: '400px' }}>
-            <Paper style={{ padding: '20px' }}>
-              <Typography variant="h6" gutterBottom>
-                Historical Snapshots
-              </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell align="right">Net Worth</TableCell>
-                      <TableCell align="right">Change</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {snapshotsWithChanges.slice().reverse().map((snapshot) => (
-                      <TableRow
-                        key={snapshot.snapshotId}
-                        style={{
-                          backgroundColor: selectedSnapshot?.snapshotId === snapshot.snapshotId 
-                            ? (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5') 
-                            : 'transparent'
-                        }}
-                        hover
-                      >
-                        <TableCell 
-                          onClick={() => handleSnapshotSelect(snapshot)}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          {format(new Date(snapshot.date), 'MMM yyyy')}
-                        </TableCell>
-                        <TableCell 
-                          align="right"
-                          onClick={() => handleSnapshotSelect(snapshot)}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          {formatCurrency(snapshot.netWorth || 0)}
-                        </TableCell>
-                        <TableCell 
-                          align="right"
-                          onClick={() => handleSnapshotSelect(snapshot)}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          {snapshot.percentageChange !== null && snapshot.percentageChange !== undefined ? (
-                            <span style={{ 
-                              color: snapshot.percentageChange >= 0 ? '#4CAF50' : '#F44336',
-                              fontWeight: 'bold'
-                            }}>
-                              {snapshot.percentageChange > 0 ? '+' : ''}{snapshot.percentageChange.toFixed(2)}%
-                            </span>
-                          ) : '-'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Paper>
-          </div>
-
-          {/* Category Breakdown */}
-          {categorySummary && (
-            <div style={{ width: '100%', marginTop: '24px' }}>
-              <Paper style={{ padding: '20px' }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Typography variant="h6">
-                    Asset & Liability Breakdown - {format(new Date(categorySummary.date), 'MMMM yyyy')}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    startIcon={<EditIcon />}
-                    onClick={() => handleEditSnapshot(selectedSnapshot)}
-                    size="small"
-                  >
-                    Edit This Snapshot
-                  </Button>
+              </Box>
+              {selectedSnapshot.percentageChange !== null && selectedSnapshot.percentageChange !== undefined && (
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Chip
+                    label={`${selectedSnapshot.percentageChange > 0 ? '+' : ''}${selectedSnapshot.percentageChange.toFixed(2)}%`}
+                    color={selectedSnapshot.percentageChange >= 0 ? 'success' : 'error'}
+                    size="medium"
+                  />
+                  {selectedSnapshot.dollarChange !== null && selectedSnapshot.dollarChange !== undefined && (
+                    <Typography variant="body1" color="textSecondary">
+                      ({selectedSnapshot.dollarChange > 0 ? '+' : ''}{formatCurrency(selectedSnapshot.dollarChange)})
+                    </Typography>
+                  )}
                 </Box>
-                {isLoadingDetail ? (
-                  <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
-                    <CircularProgress />
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '16px' }}>
-                    {categorySummary.categories.map((category) => (
-                      <div key={`${category.category}-${category.isAsset}`}>
-                        <Card variant="outlined">
-                          <CardContent>
-                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                              <Typography variant="h6">
-                                {category.category}
-                              </Typography>
-                              <Chip
-                                label={formatCurrency(category.totalValue)}
-                                color={category.isAsset ? 'success' : 'error'}
-                                variant={category.isAsset ? 'filled' : 'outlined'}
-                              />
-                            </Box>
-                            <Box>
-                              {category.items.map((item, itemIndex) => (
-                                <Box
-                                  key={`${item.accountId}-${itemIndex}`}
-                                  display="flex"
-                                  justifyContent="space-between"
-                                  alignItems="center"
-                                  py={0.5}
-                                >
-                                  <Typography variant="body2">
-                                    {item.name}
-                                  </Typography>
-                                  <Typography
-                                    variant="body2"
-                                    color={item.value >= 0 ? 'textPrimary' : 'error'}
-                                  >
-                                    {item.value >= 0 ? '' : '-'}{formatCurrency(item.value)}
-                                  </Typography>
-                                </Box>
-                              ))}
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Paper>
-            </div>
+              )}
+            </Box>
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => handleEditSnapshot(selectedSnapshot)}
+              size="small"
+            >
+              Edit Snapshot
+            </Button>
+          </Box>
+
+          {/* Notes */}
+          {selectedSnapshot.notes && (
+            <Typography variant="body2" color="textSecondary" mb={3}>
+              {selectedSnapshot.notes}
+            </Typography>
           )}
-        </div>
+
+          {/* Asset & Liability Breakdown */}
+          {categorySummary && (
+            <>
+              {isLoadingDetail ? (
+                <Box display="flex" justifyContent="center" py={4}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Box className="breakdown-grid" sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 2 }}>
+                  {categorySummary.categories.map((category) => (
+                    <Card 
+                      key={`${category.category}-${category.isAsset}`} 
+                      variant="outlined"
+                      sx={{ height: '100%' }}
+                    >
+                      <CardContent>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            {category.category}
+                          </Typography>
+                          <Chip
+                            label={formatCurrency(category.totalValue)}
+                            color={category.isAsset ? 'success' : 'error'}
+                            variant={category.isAsset ? 'filled' : 'outlined'}
+                            size="small"
+                          />
+                        </Box>
+                        <Box>
+                          {category.items.map((item, itemIndex) => (
+                            <Box
+                              key={`${item.accountId}-${itemIndex}`}
+                              display="flex"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              py={0.5}
+                            >
+                              <Typography variant="body2">
+                                {item.name}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                color={item.value >= 0 ? 'textPrimary' : 'error'}
+                              >
+                                {item.value >= 0 ? '' : '-'}{formatCurrency(item.value)}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+            </>
+          )}
+        </Paper>
+      )}
+
+      {/* Historical Snapshots Table - Moved to bottom with pagination */}
+      {snapshots.length > 0 && (
+        <Paper style={{ padding: '20px', marginTop: '24px' }}>
+          <Typography variant="h6" gutterBottom>
+            Historical Snapshots
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell align="right">Net Worth</TableCell>
+                  <TableCell align="right">Change</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {snapshotsWithChanges
+                  .slice()
+                  .reverse()
+                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                  .map((snapshot) => (
+                    <TableRow
+                      key={snapshot.snapshotId}
+                      style={{
+                        backgroundColor: selectedSnapshot?.snapshotId === snapshot.snapshotId 
+                          ? (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5') 
+                          : 'transparent',
+                        cursor: 'pointer'
+                      }}
+                      hover
+                      onClick={() => handleSnapshotSelect(snapshot)}
+                    >
+                      <TableCell>
+                        {format(new Date(snapshot.date), 'MMM yyyy')}
+                      </TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(snapshot.netWorth || 0)}
+                      </TableCell>
+                      <TableCell align="right">
+                        {snapshot.percentageChange !== null && snapshot.percentageChange !== undefined ? (
+                          <span style={{ 
+                            color: snapshot.percentageChange >= 0 ? '#4CAF50' : '#F44336',
+                            fontWeight: 'bold'
+                          }}>
+                            {snapshot.percentageChange > 0 ? '+' : ''}{snapshot.percentageChange.toFixed(2)}%
+                          </span>
+                        ) : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            component="div"
+            count={snapshotsWithChanges.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+          />
+        </Paper>
       )}
 
       {/* Add Snapshot Modal */}
@@ -961,18 +969,12 @@ const NetWorth: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Account Manager Modal */}
-      <AccountManager 
-        open={accountManagerOpen} 
-        onClose={handleAccountManagerClose}
-        onAccountsChanged={handleAccountsChanged}
-      />
-
-      {/* Category Manager Modal */}
-      <CategoryManager 
-        open={categoryManagerOpen} 
-        onClose={() => setCategoryManagerOpen(false)}
-        onCategoriesChanged={loadNetWorthSnapshots}
+      {/* Settings Manager Modal (Accounts & Categories) */}
+      <SettingsManager 
+        open={settingsManagerOpen} 
+        onClose={handleSettingsManagerClose}
+        onAccountsChanged={handleSettingsChanged}
+        onCategoriesChanged={() => loadNetWorthSnapshots(dateRangeState.startDate || undefined, dateRangeState.endDate || undefined)}
       />
     </div>
   );

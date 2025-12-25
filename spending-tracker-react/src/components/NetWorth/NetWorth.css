@@ -5,8 +5,8 @@
 }
 
 .networth-page-header {
-  margin-bottom: 32px;
-  padding-bottom: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
   border-bottom: 2px solid #f0f0f0;
 }
 
@@ -49,6 +49,24 @@
   font-size: 12px;
 }
 
+/* Selected Snapshot View Styles */
+.selected-snapshot-section {
+  border-radius: 8px;
+}
+
+.snapshot-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  padding-bottom: 16px;
+}
+
+.breakdown-grid .MuiCard-root {
+  transition: box-shadow 0.2s ease;
+}
+
+.breakdown-grid .MuiCard-root:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
 .add-snapshot-form {
   min-width: 500px;
 }
@@ -82,6 +100,15 @@
     flex-direction: column;
     align-items: stretch;
   }
+  
+  .snapshot-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  
+  .breakdown-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* Dark mode styles */
@@ -109,4 +136,12 @@
 [data-theme='dark'] .net-worth-total {
   background-color: #262626;
   color: rgba(255, 255, 255, 0.87);
+}
+
+[data-theme='dark'] .snapshot-header {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme='dark'] .breakdown-grid .MuiCard-root:hover {
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
 }
