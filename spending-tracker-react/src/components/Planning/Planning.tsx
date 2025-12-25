@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
   useTheme
 } from '@mui/material';
 import {
@@ -1060,14 +1061,6 @@ const Planning = () => {
 
   const { totalIncome, totalExpenses, netAmount, budgetAllocationPercentage } = calculateTotals();
 
-  if (loading) {
-    return (
-      <div className="planning-container">
-        <Typography>Loading categories...</Typography>
-      </div>
-    );
-  }
-
   return (
     <div className="planning-container">
       {/* Page Header */}
@@ -1309,7 +1302,11 @@ const Planning = () => {
           </Paper>
 
           {/* Income Categories */}
-          {incomeParents.length > 0 || getStandaloneCategories('Income').length > 0 ? 
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : incomeParents.length > 0 || getStandaloneCategories('Income').length > 0 ? 
             renderOrganizedCategories('Income', 'Income') :
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               No income categories found. Please add some categories first.
@@ -1317,7 +1314,11 @@ const Planning = () => {
           }
 
           {/* Expense Categories */}
-          {expenseParents.length > 0 || getStandaloneCategories('Expense').length > 0 ? 
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : expenseParents.length > 0 || getStandaloneCategories('Expense').length > 0 ? 
             renderOrganizedCategories('Expense', 'Expenses') :
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               No expense categories found. Please add some categories first.
