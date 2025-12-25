@@ -411,7 +411,7 @@ const Transactions = () => {
     setDeleteRecurringDialogOpen(false);
 
     if (deleteAllFuture && transactionToDelete.recurringTransactionId) {
-      // Deactivate the recurring transaction
+      // Delete all transactions linked to this recurring transaction and deactivate the rule
       if (!user) {
         setError('Please sign in to delete transactions');
         return;
@@ -425,29 +425,47 @@ const Transactions = () => {
           throw new Error('No access token available');
         }
 
-        // Import deleteRecurringTransactionNeon
-        const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+        const pg = PostgrestClientFactory.createClient(accessToken);
         
+        // Delete all transactions linked to this recurring transaction
+        const { error: deleteError } = await pg
+          .from('Transactions')
+          .delete()
+          .eq('RecurringTransactionId', transactionToDelete.recurringTransactionId);
+
+        if (deleteError) {
+          throw new Error(deleteError.message || 'Failed to delete transactions');
+        }
+
+        // Deactivate the recurring transaction rule
+        const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
         await deleteRecurringTransactionNeon(
           transactionToDelete.recurringTransactionId,
           accessToken
         );
 
         setNotification({ 
-          message: 'Recurring transaction deactivated successfully', 
+          message: 'All recurring transactions deleted successfully', 
           severity: 'success' 
         });
+        
+        // Reload transactions to update the list
+        await loadTransactions();
+        setTransactionToDelete(null);
+        return;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         setNotification({ 
-          message: 'Failed to deactivate recurring transaction: ' + errorMessage, 
+          message: 'Failed to delete recurring transactions: ' + errorMessage, 
           severity: 'error' 
         });
-        console.error('Error deactivating recurring transaction:', error);
+        console.error('Error deleting recurring transactions:', error);
+        setTransactionToDelete(null);
+        return;
       }
     }
 
-    // Delete the current transaction
+    // Delete only the current transaction
     await deleteTransaction(transactionToDelete);
     setTransactionToDelete(null);
   };
@@ -1256,8 +1274,17 @@ const Transactions = () => {
           open={notification !== null}
           autoHideDuration={6000}
           onClose={() => setNotification(null)}
-          message={notification?.message}
-        />
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert 
+            onClose={() => setNotification(null)} 
+            severity={notification?.severity || 'success'}
+            variant="filled"
+            sx={{ width: '100%' }}
+          >
+            {notification?.message}
+          </Alert>
+        </Snackbar>
       </div>
     </LocalizationProvider>
   );
