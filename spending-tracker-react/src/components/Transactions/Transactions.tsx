@@ -1279,8 +1279,15 @@ const Transactions = () => {
           <Alert 
             onClose={() => setNotification(null)} 
             severity={notification?.severity || 'success'}
-            variant="filled"
-            sx={{ width: '100%' }}
+            variant="standard"
+            sx={{ 
+              width: '100%',
+              bgcolor: notification?.severity === 'error' ? 'error.main' : 'success.main',
+              color: 'white',
+              '& .MuiAlert-icon': {
+                color: 'white'
+              }
+            }}
           >
             {notification?.message}
           </Alert>
