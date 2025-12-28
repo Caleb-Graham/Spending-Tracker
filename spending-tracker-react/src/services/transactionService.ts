@@ -1,5 +1,25 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
 
+// Helper function to get user's account ID
+export const getUserAccountId = async (
+  accessToken: string
+): Promise<number> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { data, error } = await pg
+    .from("AccountMembers")
+    .select("AccountId")
+    .eq("Status", "active")
+    .limit(1)
+    .single();
+
+  if (error || !data) {
+    throw new Error("Failed to get user account");
+  }
+
+  return data.AccountId;
+};
+
 export interface Transaction {
   transactionId: number;
   date: string;
@@ -13,6 +33,7 @@ export interface Transaction {
   } | null;
   isIncome: boolean;
   recurringTransactionId?: number | null;
+  accountId: number;
 }
 
 // Neon Data API version
@@ -45,6 +66,7 @@ export const getTransactionsNeon = async (
       categoryId: row.CategoryId,
       isIncome: row.Amount < 0 ? false : true, // negative = expense, positive = income
       recurringTransactionId: row.RecurringTransactionId,
+      accountId: row.AccountId,
       category: row.Categories
         ? {
             categoryId: row.Categories.CategoryId,
@@ -227,12 +249,16 @@ export const uploadTransactionsNeon = async (
     }
   }
 
-  // Step 6: Batch insert all transactions
+  // Step 6: Get user's account ID
+  const userAccountId = await getUserAccountId(accessToken);
+
+  // Step 7: Batch insert all transactions
   const transactionsToInsert = newRecords.map((record) => ({
     Date: record.date,
     Amount: record.amount,
     Note: record.note,
     CategoryId: categoryMap.get(record.category),
+    AccountId: userAccountId,
     // UserId will be auto-filled by the DEFAULT jwt_uid() in the database
   }));
 
@@ -288,6 +314,7 @@ export const createTransactionNeon = async (
     amount: number;
     categoryId?: number | null;
     isIncome: boolean;
+    accountId: number;
   },
   accessToken: string
 ): Promise<Transaction> => {
@@ -305,6 +332,7 @@ export const createTransactionNeon = async (
       Note: transaction.note,
       Amount: finalAmount,
       CategoryId: transaction.categoryId || null,
+      AccountId: transaction.accountId,
     })
     .select();
 
@@ -342,6 +370,7 @@ export const createTransactionNeon = async (
     amount: row.Amount,
     categoryId: row.CategoryId,
     isIncome: row.Amount > 0,
+    accountId: row.AccountId,
     category,
   };
 };

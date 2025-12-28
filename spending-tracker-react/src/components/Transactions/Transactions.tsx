@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser } from '@stackframe/react';
-import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
+import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, getUserAccountId, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
 import {
   Table,
   TableBody,
@@ -44,6 +44,7 @@ const Transactions = () => {
   const user = useUser();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [accountId, setAccountId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +114,12 @@ const Transactions = () => {
 
       if (!accessToken) {
         throw new Error('No access token available');
+      }
+
+      // Fetch accountId if not already loaded
+      if (accountId === null) {
+        const userAccountId = await getUserAccountId(accessToken);
+        setAccountId(userAccountId);
       }
 
       // Load data from Neon Data API
@@ -614,6 +621,11 @@ const Transactions = () => {
       return;
     }
 
+    if (accountId === null) {
+      setNotification({ message: 'Account not loaded yet', severity: 'error' });
+      return;
+    }
+
     setIsCreating(true);
     try {
       const authJson = await user.getAuthJson();
@@ -646,7 +658,8 @@ const Transactions = () => {
           note: createFormData.note,
           amount: amount,
           categoryId: createFormData.categoryId ? parseInt(createFormData.categoryId) : undefined,
-          isIncome: createFormData.isIncome
+          isIncome: createFormData.isIncome,
+          accountId: accountId,
         },
         accessToken
       );
@@ -661,7 +674,8 @@ const Transactions = () => {
             frequency: createFormData.recurringFrequency,
             interval: createFormData.recurringInterval,
             startAt: createFormData.date,
-            isIncome: createFormData.isIncome
+            isIncome: createFormData.isIncome,
+            accountId: accountId,
           },
           accessToken
         );

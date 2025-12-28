@@ -16,6 +16,7 @@ export interface RecurringTransaction {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  accountId: number;
   category?: {
     categoryId: number;
     name: string;
@@ -31,6 +32,7 @@ export interface CreateRecurringTransactionInput {
   interval?: number;
   startAt: string;
   isIncome: boolean;
+  accountId: number;
 }
 
 // Transform database row to TypeScript interface
@@ -48,6 +50,7 @@ const transformRecurringTransaction = (row: any): RecurringTransaction => ({
   isActive: row.IsActive,
   createdAt: row.CreatedAt,
   updatedAt: row.UpdatedAt,
+  accountId: row.AccountId,
   category: row.Categories
     ? {
         categoryId: row.Categories.CategoryId,
@@ -155,6 +158,7 @@ export const createRecurringTransactionNeon = async (
       StartAt: input.startAt,
       NextRunAt: nextRunAt,
       IsActive: true,
+      AccountId: input.accountId,
     })
     .select("*");
 
