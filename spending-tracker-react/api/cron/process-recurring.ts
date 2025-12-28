@@ -17,17 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const authHeader = req.headers.authorization;
   const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
 
-  console.log(
-    `[CRON] Auth check - Has header: ${!!authHeader}, Has CRON_SECRET: ${!!process
-      .env.CRON_SECRET}`
-  );
-
   if (authHeader !== expectedAuth) {
-    console.error(
-      `[CRON] Unauthorized request. Expected: ${
-        expectedAuth ? "PRESENT" : "MISSING"
-      }, Got: ${authHeader ? "PRESENT" : "MISSING"}`
-    );
+    console.error("[CRON] Unauthorized request");
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -46,7 +37,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await client.connect();
-    console.log("Connected to database");
 
     // 1. Fetch all active recurring transactions where NextRunAt <= now
     const { rows: recurringTransactions } = await client.query(
@@ -54,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     console.log(
-      `Found ${recurringTransactions.length} recurring transactions to process`
+      `[CRON] Found ${recurringTransactions.length} recurring transactions to process`
     );
 
     let processed = 0;
@@ -101,16 +91,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Commit the transaction
         await client.query("COMMIT");
-
         processed++;
-        console.log(
-          `Processed recurring transaction ${rt.RecurringTransactionId}`
-        );
       } catch (err) {
         await client.query("ROLLBACK");
         errors++;
         console.error(
-          `Error processing recurring transaction ${rt.RecurringTransactionId}:`,
+          `[CRON] Error processing recurring transaction ${rt.RecurringTransactionId}:`,
           err
         );
       }
