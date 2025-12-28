@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { StackHandler, StackProvider, StackTheme } from '@stackframe/react';
+import { StackHandler, StackProvider, StackTheme, useUser } from '@stackframe/react';
 import './App.css';
 import Header from './components/shared/Header';
 import Summary from './components/Summary/Summary';
@@ -16,6 +16,18 @@ function HandlerRoutes() {
   return <StackHandler app={stackClientApp} location={location.pathname} fullPage />;
 }
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const user = useUser();
+  const location = useLocation();
+  
+  if (!user) {
+    // Redirect to sign-in page, preserving the intended destination
+    return <Navigate to="/handler/sign-in" state={{ from: location }} replace />;
+  }
+  
+  return <>{children}</>;
+}
+
 function AppContent() {
   return (
     <div className="App">
@@ -23,11 +35,11 @@ function AppContent() {
         <Header />
         <Routes>
           <Route path="/" element={<Navigate to="/summary" replace />} />
-          <Route path="/summary" element={<Summary />} />
-          <Route path="/spending" element={<Transactions />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/networth" element={<NetWorth />} />
-          <Route path="/planning" element={<Planning />} />
+          <Route path="/summary" element={<ProtectedRoute><Summary /></ProtectedRoute>} />
+          <Route path="/spending" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+          <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
+          <Route path="/networth" element={<ProtectedRoute><NetWorth /></ProtectedRoute>} />
+          <Route path="/planning" element={<ProtectedRoute><Planning /></ProtectedRoute>} />
           <Route path="/handler/*" element={<HandlerRoutes />} />
         </Routes>
       </div>
