@@ -25,7 +25,7 @@ import {
   Delete as DeleteIcon,
   FileCopy as CopyIcon
 } from '@mui/icons-material';
-import { useUser } from '@stackframe/react';
+import { useAuth } from '../../lib/auth';
 import { type Scenario, type CreateScenarioRequest, type DuplicateScenarioRequest } from '../../services';
 import { createScenarioNeon, updateScenarioNeon, deleteScenarioNeon, duplicateScenarioNeon } from '../../services/scenarioService';
 
@@ -46,7 +46,7 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
   onScenarioChange,
   onScenariosUpdated
 }) => {
-  const user = useUser();
+  const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -63,13 +63,13 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
-    if (!user) {
+    if (!isAuthenticated) {
       setError('No authentication available');
       return;
     }
 
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       setLoading(true);
       const request: CreateScenarioRequest = {
         name: formData.name.trim(),
@@ -94,13 +94,13 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
-    if (!user) {
+    if (!isAuthenticated) {
       setError('No authentication available');
       return;
     }
 
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       setLoading(true);
       await updateScenarioNeon(accessToken!, selectedScenario.scenarioId, {
         name: formData.name.trim(),
@@ -124,13 +124,13 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
-    if (!user) {
+    if (!isAuthenticated) {
       setError('No authentication available');
       return;
     }
 
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       setLoading(true);
       const request: DuplicateScenarioRequest = {
         name: formData.name.trim(),
@@ -155,13 +155,13 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
       return;
     }
 
-    if (!user) {
+    if (!isAuthenticated) {
       setError('No authentication available');
       return;
     }
 
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       setLoading(true);
       await deleteScenarioNeon(accessToken!, scenario.scenarioId);
       setSuccessMessage('Scenario deleted successfully!');

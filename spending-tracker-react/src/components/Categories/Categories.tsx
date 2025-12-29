@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useUser } from '@stackframe/react';
+import { useAuth } from '../../lib/auth';
 import {
   Typography,
   Button,
@@ -523,7 +523,7 @@ const UnassignedChildRow: React.FC<{
 };
 
 const Categories = () => {
-  const user = useUser();
+  const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
@@ -545,11 +545,10 @@ const Categories = () => {
   }, [selectedCategoryType]);
 
   const loadData = async () => {
-    if (!user) return;
+    if (!isAuthenticated) return;
     setIsLoading(true);
     try {
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
       
       if (!accessToken) {
         showNotification('Failed to authenticate', 'error');
@@ -667,13 +666,12 @@ const Categories = () => {
 
   const handleSave = async () => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         showNotification('Please sign in to save', 'error');
         return;
       }
 
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         showNotification('Failed to authenticate', 'error');
@@ -728,13 +726,12 @@ const Categories = () => {
     }
 
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         showNotification('Please sign in to delete', 'error');
         return;
       }
 
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         showNotification('Failed to authenticate', 'error');
@@ -756,13 +753,12 @@ const Categories = () => {
 
   const handleMoveChild = async (childId: number, newParentId: number) => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         showNotification('Please sign in to move categories', 'error');
         return;
       }
 
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         showNotification('Failed to authenticate', 'error');
@@ -791,13 +787,12 @@ const Categories = () => {
 
   const handleMoveToMapping = async (childId: number, newParentMappingId: number) => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         showNotification('Please sign in to move categories', 'error');
         return;
       }
 
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         showNotification('Failed to authenticate', 'error');

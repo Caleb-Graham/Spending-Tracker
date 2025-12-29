@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useUser } from '@stackframe/react';
+import { useAuth } from '../../lib/auth';
 import {
   Typography,
   Paper,
@@ -33,12 +33,10 @@ import {
   deleteNetWorthSnapshotNeon,
   getNetWorthSnapshotsWithValuesNeon,
   getAllNetWorthAccountTemplatesNeon,
-  getAllNetWorthAccountsNeon,
   type NetWorthSnapshot, 
   type NetWorthCategorySummary,
   type CreateNetWorthSnapshotRequest,
-  type CreateNetWorthAssetRequest,
-  type NetWorthAccountWithId
+  type CreateNetWorthAssetRequest
 } from '../../services';
 import { useDateRange } from '../../hooks/useDateRange';
 import DateRangeSelector from '../shared/DateRangeSelector';
@@ -46,7 +44,7 @@ import SettingsManager from './SettingsManager';
 import './NetWorth.css';
 
 const NetWorth: React.FC = () => {
-  const user = useUser();
+  const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [snapshots, setSnapshots] = useState<NetWorthSnapshot[]>([]);
@@ -56,10 +54,6 @@ const NetWorth: React.FC = () => {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [accountTemplates, setAccountTemplates] = useState<(CreateNetWorthAssetRequest & { isArchived?: boolean })[]>([]);
   
-  // Account filter/sort state
-  const [_allAccounts, _setAllAccounts] = useState<NetWorthAccountWithId[]>([]);
-  const accountTimeSeries: any[] = [];
-  const isLoadingAccountData = false;
   const [settingsManagerOpen, setSettingsManagerOpen] = useState(false);
   
   // Pagination state for historical snapshots
@@ -80,15 +74,15 @@ const NetWorth: React.FC = () => {
 
   useEffect(() => {
     const fetchToken = async () => {
-      if (user) {
-        const authJson = await user.getAuthJson();
-        if (authJson.accessToken) {
-          setAccessToken(authJson.accessToken);
+      if (isAuthenticated) {
+        const token = await getAccessToken();
+        if (token) {
+          setAccessToken(token);
         }
       }
     };
     fetchToken();
-  }, [user]);
+  }, [isAuthenticated, getAccessToken]);
   
   // Use the shared date range hook
   const dateRangeState = useDateRange({
@@ -99,7 +93,7 @@ const NetWorth: React.FC = () => {
   });
 
   const loadNetWorthSnapshots = async (startDate?: Date, endDate?: Date) => {
-    if (!user) {
+    if (!isAuthenticated) {
       console.error('User not authenticated');
       setSnapshots([]);
       return;
@@ -107,8 +101,7 @@ const NetWorth: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         console.error('No access token available');
@@ -124,11 +117,10 @@ const NetWorth: React.FC = () => {
       
       setSnapshots(data);
       
-      // Load account templates and all accounts in parallel
+      // Load account templates
       if (accountTemplates.length === 0) {
         loadAccountTemplates(accessToken);
       }
-      loadAllAccounts(accessToken);
       
       // Select the most recent snapshot by default with calculated changes
       if (data.length > 0) {
@@ -145,25 +137,15 @@ const NetWorth: React.FC = () => {
     }
   };
 
-  const loadAllAccounts = async (accessToken: string) => {
-    try {
-      const accounts = await getAllNetWorthAccountsNeon(accessToken);
-      _setAllAccounts(accounts);
-    } catch (error) {
-      console.error('Failed to load accounts:', error);
-    }
-  };
-
   const handleSettingsManagerClose = () => {
     setSettingsManagerOpen(false);
   };
 
   const handleSettingsChanged = async () => {
-    if (user) {
-      const authJson = await user.getAuthJson();
-      if (authJson.accessToken) {
-        await loadAllAccounts(authJson.accessToken);
-        await loadAccountTemplates(authJson.accessToken);
+    if (isAuthenticated) {
+      const accessToken = await getAccessToken();
+      if (accessToken) {
+        await loadAccountTemplates(accessToken);
       }
     }
   };
@@ -215,11 +197,11 @@ const NetWorth: React.FC = () => {
 
   const loadCategorySummary = async (snapshotId: number, accessToken?: string) => {
     try {
-      if (!accessToken && !user) {
+      if (!accessToken && !isAuthenticated) {
         throw new Error('No authentication available');
       }
 
-      const token = accessToken || (await user!.getAuthJson()).accessToken;
+      const token = accessToken || (await getAccessToken());
       
       setIsLoadingDetail(true);
       const summary = await getNetWorthCategorySummaryNeon(token!, snapshotId);
@@ -359,13 +341,12 @@ const NetWorth: React.FC = () => {
 
   const handleSaveSnapshot = async () => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         console.error('User not authenticated');
         return;
       }
 
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         console.error('No access token available');
@@ -437,13 +418,12 @@ const NetWorth: React.FC = () => {
 
   const handleEditSnapshot = async (snapshot: NetWorthSnapshot) => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         console.error('User not authenticated');
         return;
       }
 
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         console.error('No access token available');
@@ -557,10 +537,10 @@ const NetWorth: React.FC = () => {
               onClick={async () => {
                 // Ensure we have account templates before opening modal
                 if (accountTemplates.length === 0) {
-                  if (user) {
-                    const authJson = await user.getAuthJson();
-                    if (authJson.accessToken) {
-                      await loadAccountTemplates(authJson.accessToken);
+                  if (isAuthenticated) {
+                    const accessToken = await getAccessToken();
+                    if (accessToken) {
+                      await loadAccountTemplates(accessToken);
                     }
                   }
                 }
@@ -577,58 +557,6 @@ const NetWorth: React.FC = () => {
           </Box>
         </div>
       </div>
-
-      {/* Account Time Series Chart */}
-      {accountTimeSeries.length > 0 && (
-        <Box style={{ marginTop: '24px' }}>
-          <Paper style={{ padding: '20px' }}>
-            <Typography variant="h6" gutterBottom>
-              Account Value Over Time
-            </Typography>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart
-                data={accountTimeSeries}
-                margin={{
-                  top: 5,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis 
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip 
-                  formatter={(value: any) => `$${(value as number).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                  labelFormatter={(label) => `${label}`}
-                />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#2196F3" 
-                  strokeWidth={3}
-                  dot={{ fill: '#2196F3', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6 }}
-                  name="Account Value"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Box>
-      )}
-
-      {isLoadingAccountData && (
-        <Box style={{ marginTop: '24px', display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Box>
-      )}
 
       {/* Chart Section */}
       <Box style={{ marginTop: '24px' }}>
@@ -865,7 +793,7 @@ const NetWorth: React.FC = () => {
               type="date"
               value={newSnapshotDate}
               onChange={(e) => setNewSnapshotDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
             />
 
@@ -936,8 +864,8 @@ const NetWorth: React.FC = () => {
                         placeholder="$0.00"
                         size="small"
                         sx={{ width: '150px' }}
-                        inputProps={{
-                          inputMode: 'decimal'
+                        slotProps={{
+                          htmlInput: { inputMode: 'decimal' }
                         }}
                       />
                     </Box>

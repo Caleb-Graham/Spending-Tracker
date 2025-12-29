@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useUser } from '@stackframe/react';
+import { useAuth } from '../../lib/auth';
 import { 
   Select, 
   MenuItem, 
@@ -49,7 +49,7 @@ const dateRangeOptions = [
 ];
 
 const Summary = () => {
-  const user = useUser();
+  const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   // Load date range from localStorage or default to 'ytd'
   const [dateRange, setDateRange] = useState(() => {
@@ -276,13 +276,12 @@ const Summary = () => {
       return earliestDateCache.current;
     }
 
-    if (!user) {
+    if (!isAuthenticated) {
       return new Date();
     }
 
     try {
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         return new Date();
@@ -311,7 +310,7 @@ const Summary = () => {
   };
 
   const loadCategorySummary = async (startDate?: Date, endDate?: Date) => {
-    if (!user) {
+    if (!isAuthenticated) {
       setError('Please sign in to view summary');
       return;
     }
@@ -326,8 +325,7 @@ const Summary = () => {
     setError(null);
     try {
       // Get JWT token from Neon Auth
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         throw new Error('No access token available');
@@ -407,7 +405,7 @@ const Summary = () => {
     
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, startDate?.toISOString(), endDate?.toISOString(), user?.id]);
+  }, [dateRange, startDate?.toISOString(), endDate?.toISOString(), isAuthenticated]);
 
   const handleDateRangeChange = async (event: any) => {
     const value = event.target.value;
@@ -536,7 +534,7 @@ const Summary = () => {
   return (
     <div className="summary-container">
       {/* Authentication Check */}
-      {!user && (
+      {!isAuthenticated && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Please <a href="/handler/sign-in">sign in</a> to view your summary.
         </Alert>
@@ -643,6 +641,7 @@ const Summary = () => {
                 borderBottom: `2px solid transparent`,
                 px: 2,
                 py: 1,
+                textTransform: 'none',
                 '&.Mui-selected': {
                   borderBottom: `2px solid ${theme.palette.primary.main}`,
                   backgroundColor: 'transparent',

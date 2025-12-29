@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useUser } from '@stackframe/react';
+import { useAuth } from '../../lib/auth';
 import {
   Dialog,
   DialogTitle,
@@ -82,7 +82,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
   onAccountsChanged,
   onCategoriesChanged 
 }) => {
-  const user = useUser();
+  const { isAuthenticated, getAccessToken } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
   
@@ -123,15 +123,13 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
   // ============ ACCOUNTS FUNCTIONS ============
   const loadAccounts = async () => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
 
       setIsLoadingAccounts(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;
@@ -186,7 +184,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
 
   const handleSaveAccount = async () => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
@@ -202,9 +200,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
       }
 
       setIsSavingAccount(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;
@@ -238,15 +234,13 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
     }
 
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
 
       setIsSavingAccount(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;
@@ -269,15 +263,13 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
     }
 
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
 
       setIsSavingAccount(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;
@@ -300,15 +292,13 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
     }
 
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
 
       setIsSavingAccount(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;
@@ -339,15 +329,13 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
   // ============ CATEGORIES FUNCTIONS ============
   const loadCategories = async () => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
 
       setIsLoadingCategories(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;
@@ -399,7 +387,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
 
   const handleSaveCategory = async () => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
@@ -410,9 +398,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
       }
 
       setIsSavingCategory(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;
@@ -442,15 +428,13 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
     }
 
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         setError('User not authenticated');
         return;
       }
 
       setIsSavingCategory(true);
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
-
+      const accessToken = await getAccessToken();
       if (!accessToken) {
         setError('No access token available');
         return;

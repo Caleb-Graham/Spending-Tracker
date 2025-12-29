@@ -6,7 +6,6 @@ import { PostgrestClient } from "@supabase/postgrest-js";
  */
 export class PostgrestClientFactory {
   private static readonly DATA_API_URL = import.meta.env.VITE_DATA_API_URL;
-  private static readonly NEON_BRANCH = import.meta.env.VITE_NEON_BRANCH;
 
   /**
    * Creates a configured PostgrestClient instance
@@ -22,11 +21,6 @@ export class PostgrestClientFactory {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
     };
-
-    // Add Neon branch header if specified
-    if (this.NEON_BRANCH) {
-      headers["Neon-Branch"] = this.NEON_BRANCH;
-    }
 
     return new PostgrestClient(this.DATA_API_URL, { headers });
   }
@@ -47,13 +41,5 @@ export class PostgrestClientFactory {
    */
   static getDataApiUrl(): string | undefined {
     return this.DATA_API_URL;
-  }
-
-  /**
-   * Gets the configured Neon branch
-   * @returns The Neon branch or undefined if not set
-   */
-  static getNeonBranch(): string | undefined {
-    return this.NEON_BRANCH;
   }
 }

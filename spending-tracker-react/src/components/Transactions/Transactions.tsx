@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useUser } from '@stackframe/react';
+import { useAuth } from '../../lib/auth';
 import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, getUserAccountId, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
 import {
   Table,
@@ -41,7 +41,7 @@ type SortField = 'date' | 'note' | 'category' | 'amount' | 'type';
 type SortDirection = 'asc' | 'desc';
 
 const Transactions = () => {
-  const user = useUser();
+  const { user, isAuthenticated, getAccessToken } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accountId, setAccountId] = useState<number | null>(null);
@@ -100,7 +100,7 @@ const Transactions = () => {
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
 
   const loadTransactions = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       setError('Please sign in to view transactions');
       return;
     }
@@ -109,8 +109,7 @@ const Transactions = () => {
     setError(null);
     try {
       // Get JWT token from Neon Auth
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         throw new Error('No access token available');
@@ -294,7 +293,7 @@ const Transactions = () => {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) {
+    if (!file || !isAuthenticated) {
       return;
     }
 
@@ -302,8 +301,7 @@ const Transactions = () => {
     setError(null);
     try {
       // Get JWT token from Neon Auth
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         throw new Error('No access token available');
@@ -347,10 +345,9 @@ const Transactions = () => {
       recurringIsActive: true
     };
     
-    if (transaction.recurringTransactionId && user) {
+    if (transaction.recurringTransactionId && isAuthenticated) {
       try {
-        const authJson = await user.getAuthJson();
-        const accessToken = authJson.accessToken;
+        const accessToken = await getAccessToken();
         if (accessToken) {
           const { getRecurringTransactionByIdNeon } = await import('../../services/recurringTransactionService');
           const recurring = await getRecurringTransactionByIdNeon(
@@ -419,14 +416,13 @@ const Transactions = () => {
 
     if (deleteAllFuture && transactionToDelete.recurringTransactionId) {
       // Delete all transactions linked to this recurring transaction and deactivate the rule
-      if (!user) {
+      if (!isAuthenticated) {
         setError('Please sign in to delete transactions');
         return;
       }
 
       try {
-        const authJson = await user.getAuthJson();
-        const accessToken = authJson.accessToken;
+        const accessToken = await getAccessToken();
 
         if (!accessToken) {
           throw new Error('No access token available');
@@ -478,14 +474,13 @@ const Transactions = () => {
   };
 
   const deleteTransaction = async (transaction: Transaction) => {
-    if (!user) {
+    if (!isAuthenticated) {
       setError('Please sign in to delete transactions');
       return;
     }
 
     try {
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         throw new Error('No access token available');
@@ -512,14 +507,13 @@ const Transactions = () => {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingTransaction || !user) {
+    if (!editingTransaction || !isAuthenticated) {
       return;
     }
 
     setIsSaving(true);
     try {
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         throw new Error('No access token available');
@@ -617,7 +611,7 @@ const Transactions = () => {
   };
 
   const handleCreateTransaction = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       return;
     }
 
@@ -628,8 +622,7 @@ const Transactions = () => {
 
     setIsCreating(true);
     try {
-      const authJson = await user.getAuthJson();
-      const accessToken = authJson.accessToken;
+      const accessToken = await getAccessToken();
 
       if (!accessToken) {
         throw new Error('No access token available');
@@ -710,7 +703,7 @@ const Transactions = () => {
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <div className="transactions-container">
         {/* Authentication Check */}
-        {!user && (
+        {!isAuthenticated && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             Please <a href="/handler/sign-in">sign in</a> to view your transactions.
           </Alert>
@@ -745,7 +738,7 @@ const Transactions = () => {
             <Button
               variant="contained"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || !user}
+              disabled={isUploading || !isAuthenticated}
             >
               {isUploading ? 'Uploading...' : 'Import Transactions'}
             </Button>
@@ -1014,13 +1007,15 @@ const Transactions = () => {
               value={editFormData.date}
               onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
               fullWidth
-              InputLabelProps={{ shrink: true }}
-              InputProps={{
-                sx: {
-                  '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                    filter: 'invert(1)',
-                    opacity: 0.7,
-                    cursor: 'pointer'
+              slotProps={{
+                inputLabel: { shrink: true },
+                input: {
+                  sx: {
+                    '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                      filter: 'invert(1)',
+                      opacity: 0.7,
+                      cursor: 'pointer'
+                    }
                   }
                 }
               }}
@@ -1037,7 +1032,7 @@ const Transactions = () => {
               value={editFormData.amount}
               onChange={(e) => setEditFormData({ ...editFormData, amount: e.target.value })}
               fullWidth
-              inputProps={{ step: '0.01', min: '0' }}
+              slotProps={{ htmlInput: { step: '0.01', min: '0' } }}
             />
             <FormControl fullWidth>
               <InputLabel>Type</InputLabel>
@@ -1110,7 +1105,7 @@ const Transactions = () => {
                         recurringInterval: parseInt(e.target.value) || 1 
                       })}
                       fullWidth
-                      inputProps={{ min: 1 }}
+                      slotProps={{ htmlInput: { min: 1 } }}
                       helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
                     />
                   </>
@@ -1173,13 +1168,15 @@ const Transactions = () => {
               value={createFormData.date}
               onChange={(e) => setCreateFormData({ ...createFormData, date: e.target.value })}
               fullWidth
-              InputLabelProps={{ shrink: true }}
-              InputProps={{
-                sx: {
-                  '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                    filter: 'invert(1)',
-                    opacity: 0.7,
-                    cursor: 'pointer'
+              slotProps={{
+                inputLabel: { shrink: true },
+                input: {
+                  sx: {
+                    '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                      filter: 'invert(1)',
+                      opacity: 0.7,
+                      cursor: 'pointer'
+                    }
                   }
                 }
               }}
@@ -1197,7 +1194,7 @@ const Transactions = () => {
               value={createFormData.amount}
               onChange={(e) => setCreateFormData({ ...createFormData, amount: e.target.value })}
               fullWidth
-              inputProps={{ step: '0.01', min: '0' }}
+              slotProps={{ htmlInput: { step: '0.01', min: '0' } }}
               placeholder="0.00"
             />
             <FormControl fullWidth>
@@ -1264,7 +1261,7 @@ const Transactions = () => {
                     value={createFormData.recurringInterval}
                     onChange={(e) => setCreateFormData({ ...createFormData, recurringInterval: Math.max(1, parseInt(e.target.value) || 1) })}
                     fullWidth
-                    inputProps={{ min: '1', max: '12' }}
+                    slotProps={{ htmlInput: { min: '1', max: '12' } }}
                     helperText={`Every ${createFormData.recurringInterval} ${createFormData.recurringInterval === 1 ? createFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : createFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
                   />
                 </>

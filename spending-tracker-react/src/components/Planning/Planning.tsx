@@ -27,7 +27,7 @@ import {
   PieChart as PieChartIcon,
   Settings as SettingsIcon
 } from '@mui/icons-material';
-import { useUser } from '@stackframe/react';
+import { useAuth } from '../../lib/auth';
 import { type Category, type CategoryMapping, type Scenario } from '../../services';
 import { getAllCategoryDataNeon } from '../../services/categoryService';
 import { getPlanningBudgetsNeon, savePlanningBudgetNeon, deletePlanningBudgetNeon } from '../../services/planningService';
@@ -53,7 +53,7 @@ interface ParentPlanningData {
 }
 
 const Planning = () => {
-  const user = useUser();
+  const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   const [categories, setCategories] = useState<Category[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
@@ -75,18 +75,6 @@ const Planning = () => {
   const [showScenarioManager, setShowScenarioManager] = useState(false);
 
   const currentYear = new Date().getFullYear();
-
-  // Not currently used but kept for future reference
-  // const convertAmount = (amount: number, fromMode: 'monthly' | 'yearly' | 'weekly', toMode: 'monthly' | 'yearly' | 'weekly'): number => {
-  //   if (fromMode === toMode) return amount;
-  //   if (fromMode === 'monthly' && toMode === 'yearly') return amount * 12;
-  //   if (fromMode === 'yearly' && toMode === 'monthly') return amount / 12;
-  //   if (fromMode === 'monthly' && toMode === 'weekly') return amount / 4.33; // Average weeks per month
-  //   if (fromMode === 'weekly' && toMode === 'monthly') return amount * 4.33;
-  //   if (fromMode === 'weekly' && toMode === 'yearly') return amount * 52;
-  //   if (fromMode === 'yearly' && toMode === 'weekly') return amount / 52;
-  //   return amount;
-  // };
 
   // Helper function to get display amount based on current view mode
   const getDisplayAmount = (monthlyAmount: number): number => {
@@ -200,11 +188,11 @@ const Planning = () => {
 
   const loadInitialData = async () => {
     try {
-      if (!user) {
+      if (!isAuthenticated) {
         throw new Error('No authentication available');
       }
 
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       
       setLoading(true);
       // Use combined function to fetch all category data in a single query
@@ -244,10 +232,10 @@ const Planning = () => {
   };
 
   const loadPlanningData = async () => {
-    if (!currentScenario || !user) return;
+    if (!currentScenario || !isAuthenticated) return;
     
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       const planningBudgets = await getPlanningBudgetsNeon(accessToken!, currentScenario.scenarioId, currentYear);
       
       // Initialize planning data with saved values or empty values
@@ -285,10 +273,10 @@ const Planning = () => {
 
   // Manual save function that saves all changed budgets
   const handleSaveAll = React.useCallback(async () => {
-    if (!currentScenario || !user) return;
+    if (!currentScenario || !isAuthenticated) return;
     
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       
       // Collect all budgets to save (both parent and child categories)
       const budgetsToSave: Array<{ categoryId: number; monthlyAmount: number }> = [];
@@ -342,7 +330,7 @@ const Planning = () => {
       setError('Failed to save planning data');
       setSavingStates(new Set());
     }
-  }, [currentScenario, user, currentYear, planningData, parentPlanningData]);
+  }, [currentScenario, isAuthenticated, getAccessToken, currentYear, planningData, parentPlanningData]);
 
   const handleAmountChange = (categoryId: number, value: string) => {
     // Store the raw input value for display
@@ -536,10 +524,10 @@ const Planning = () => {
   };
 
   const handleClearAll = async () => {
-    if (!currentScenario || !user) return;
+    if (!currentScenario || !isAuthenticated) return;
     
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       setLoading(true);
       
       // Clear all budgets from database
@@ -592,10 +580,10 @@ const Planning = () => {
   };
 
   const handleScenariosUpdated = async () => {
-    if (!user) return;
+    if (!isAuthenticated) return;
     
     try {
-      const accessToken = (await user.getAuthJson()).accessToken;
+      const accessToken = await getAccessToken();
       const updatedScenarios = await getScenariosNeon(accessToken!);
       setScenarios(updatedScenarios);
       
@@ -811,15 +799,17 @@ const Planning = () => {
             onChange={(e) => handleParentAmountChange(parent.categoryId, e.target.value)}
             onBlur={() => handleAmountBlur(parent.categoryId)}
             onFocus={(e) => handleAmountFocus(parent.categoryId, e.target.value)}
-            InputProps={{
-              startAdornment: <InputAdornment position="start">$</InputAdornment>,
-              endAdornment: savingStates.has(parent.categoryId) ? (
-                <InputAdornment position="end">
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                    Saving...
-                  </Typography>
-                </InputAdornment>
-              ) : undefined,
+            slotProps={{
+              input: {
+                startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                endAdornment: savingStates.has(parent.categoryId) ? (
+                  <InputAdornment position="end">
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                      Saving...
+                    </Typography>
+                  </InputAdornment>
+                ) : undefined,
+              }
             }}
             variant="outlined"
             size="small"
@@ -872,15 +862,17 @@ const Planning = () => {
                           onChange={(e) => handleAmountChange(mapping.categoryId, e.target.value)}
                           onBlur={() => handleAmountBlur(mapping.categoryId)}
                           onFocus={(e) => handleAmountFocus(mapping.categoryId, e.target.value)}
-                          InputProps={{
-                            startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                            endAdornment: savingStates.has(mapping.categoryId) ? (
-                              <InputAdornment position="end">
-                                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                                  Saving...
-                                </Typography>
-                              </InputAdornment>
-                            ) : undefined,
+                          slotProps={{
+                            input: {
+                              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                              endAdornment: savingStates.has(mapping.categoryId) ? (
+                                <InputAdornment position="end">
+                                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                                    Saving...
+                                  </Typography>
+                                </InputAdornment>
+                              ) : undefined,
+                            }
                           }}
                           variant="outlined"
                           size="small"
@@ -967,15 +959,17 @@ const Planning = () => {
                   onChange={(e) => handleAmountChange(category.categoryId, e.target.value)}
                   onBlur={() => handleAmountBlur(category.categoryId)}
                   onFocus={(e) => handleAmountFocus(category.categoryId, e.target.value)}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                    endAdornment: savingStates.has(category.categoryId) ? (
-                      <InputAdornment position="end">
-                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                          Saving...
-                        </Typography>
-                      </InputAdornment>
-                    ) : undefined,
+                  slotProps={{
+                    input: {
+                      startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                      endAdornment: savingStates.has(category.categoryId) ? (
+                        <InputAdornment position="end">
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                            Saving...
+                          </Typography>
+                        </InputAdornment>
+                      ) : undefined,
+                    }
                   }}
                   variant="outlined"
                   size="small"

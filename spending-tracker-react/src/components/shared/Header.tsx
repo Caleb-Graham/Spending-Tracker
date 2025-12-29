@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useUser } from '@stackframe/react';
-import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../lib/auth';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   AppBar, 
   Toolbar, 
@@ -26,8 +26,9 @@ import { useThemeMode } from '../../context/ThemeContext';
 import './Header.css';
 
 const Header: React.FC = () => {
-  const user = useUser();
+  const { user, isAuthenticated, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const { mode, toggleTheme } = useThemeMode();
 
@@ -50,17 +51,18 @@ const Header: React.FC = () => {
     setAnchorEl(null);
   };
 
-  const handleSignOut = () => {
-    window.location.href = '/handler/sign-out';
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/handler/sign-in');
     handleMenuClose();
   };
 
   const handleProfile = () => {
-    window.location.href = '/handler/account-settings';
+    navigate('/handler/account-settings');
     handleMenuClose();
   };
 
-  // Get user's profile image and display name
+  // Get user's profile image and display name (Stack Auth properties)
   const profileImageUrl = user?.profileImageUrl || undefined;
   const displayName = user?.displayName || user?.primaryEmail || 'User';
 
@@ -140,8 +142,8 @@ const Header: React.FC = () => {
               </Menu>
             </>
           )}
-          {!user && (
-            <IconButton onClick={() => window.location.href = '/handler/sign-in'} sx={{ p: 0 }}>
+          {!isAuthenticated && (
+            <IconButton onClick={() => navigate('/handler/sign-in')} sx={{ p: 0 }}>
               <Avatar sx={{ width: 40, height: 40 }}>?</Avatar>
             </IconButton>
           )}
