@@ -29,7 +29,9 @@ import {
   DialogContent,
   DialogActions,
   Snackbar,
-  Switch
+  Switch,
+  Avatar,
+  Tooltip
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -852,6 +854,7 @@ const Transactions = () => {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell sx={{ width: 36, padding: '4px 8px' }}></TableCell>
                 <TableCell sx={{ width: 40, padding: '8px' }}></TableCell>
                 <TableCell>
                   <TableSortLabel
@@ -904,13 +907,13 @@ const Transactions = () => {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
+                  <TableCell colSpan={8} align="center">
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : sortedTransactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
+                  <TableCell colSpan={8} align="center">
                     {transactions.length === 0 
                       ? "No transactions found. Upload a CSV file to get started."
                       : "No transactions match the current filters."
@@ -926,6 +929,20 @@ const Transactions = () => {
                       backgroundColor: transaction.isIncome ? 'rgba(76, 175, 80, 0.1)' : undefined
                     }}
                   >
+                    <TableCell sx={{ width: 36, padding: '4px 8px', textAlign: 'center' }}>
+                      {transaction.userId && user?.id !== transaction.userId && (
+                        <Tooltip title="Added by another user" arrow>
+                          <Avatar
+                            sx={{ 
+                              width: 24, 
+                              height: 24,
+                              fontSize: 12,
+                              bgcolor: 'primary.main'
+                            }}
+                          />
+                        </Tooltip>
+                      )}
+                    </TableCell>
                     <TableCell sx={{ width: 40, padding: '8px', textAlign: 'center' }}>
                       {transaction.recurringTransactionId && (
                         <RepeatIcon 
