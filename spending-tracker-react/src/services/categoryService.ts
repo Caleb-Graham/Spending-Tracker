@@ -1,4 +1,5 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
+import { getUserAccountId } from "./transactionService";
 
 export interface CategorySummary {
   categoryId: number;
@@ -583,6 +584,9 @@ export const createParentCategoryNeon = async (
 ): Promise<Category> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
+  // Get user's account ID
+  const accountId = await getUserAccountId(accessToken);
+
   const { data, error } = await pg
     .from("Categories")
     .insert([
@@ -590,6 +594,7 @@ export const createParentCategoryNeon = async (
         Name: request.name,
         Type: request.type,
         ParentCategoryId: null,
+        AccountId: accountId,
       },
     ])
     .select();
@@ -668,6 +673,9 @@ export const createCategoryMappingNeon = async (
 ): Promise<CategoryMapping> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
+  // Get user's account ID
+  const accountId = await getUserAccountId(accessToken);
+
   // First, resolve parentCategoryName to parentCategoryId if provided
   let finalParentCategoryId = request.parentCategoryId;
 
@@ -694,6 +702,7 @@ export const createCategoryMappingNeon = async (
         Name: request.categoryName,
         Type: request.type,
         ParentCategoryId: finalParentCategoryId,
+        AccountId: accountId,
       },
     ])
     .select("CategoryId, Name, Type, ParentCategoryId");

@@ -25,7 +25,7 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { 
   getNetWorthCategorySummaryNeon,
   getNetWorthDetailNeon,
@@ -471,7 +471,7 @@ const NetWorth: React.FC = () => {
   // Transform data for chart with calculated changes
   const snapshotsWithChanges = calculateChanges(snapshots);
   const chartData = snapshotsWithChanges.map(snapshot => ({
-    date: format(new Date(snapshot.date), 'MMM yyyy'),
+    date: format(parseISO(snapshot.date), 'MMM yyyy'),
     fullDate: snapshot.date,
     netWorth: snapshot.netWorth || 0,
     formattedNetWorth: `$${(snapshot.netWorth || 0).toLocaleString('en-US', { 
@@ -619,7 +619,7 @@ const NetWorth: React.FC = () => {
             <Box display="flex" alignItems="center" gap={3} flexWrap="wrap">
               <Box>
                 <Typography variant="h5" fontWeight="bold" gutterBottom>
-                  {format(new Date(selectedSnapshot.date), 'MMMM yyyy')}
+                  {format(parseISO(selectedSnapshot.date), 'MMMM yyyy')}
                 </Typography>
                 <Typography variant="h4" color="primary" fontWeight="bold">
                   {formatCurrency(selectedSnapshot.netWorth || 0)}
@@ -748,7 +748,7 @@ const NetWorth: React.FC = () => {
                       onClick={() => handleSnapshotSelect(snapshot)}
                     >
                       <TableCell>
-                        {format(new Date(snapshot.date), 'MMM yyyy')}
+                        {format(parseISO(snapshot.date), 'MMM yyyy')}
                       </TableCell>
                       <TableCell align="right">
                         {formatCurrency(snapshot.netWorth || 0)}
