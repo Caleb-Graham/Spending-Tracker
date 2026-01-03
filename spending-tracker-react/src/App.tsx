@@ -8,7 +8,7 @@ import Transactions from './components/Transactions/Transactions';
 import Categories from './components/Categories/Categories';
 import NetWorth from './components/NetWorth/NetWorth';
 import Planning from './components/Planning/Planning';
-import { stackApp, useAuth } from './lib/auth';
+import { stackApp, useAuth } from './utils/auth';
 import { ThemeProvider } from './context/ThemeContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

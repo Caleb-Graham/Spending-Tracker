@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../utils/auth';
 import { 
   Select, 
   MenuItem, 
@@ -26,7 +26,7 @@ import { ExpandMore, ExpandLess } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { startOfYear, subDays } from 'date-fns';
+import { startOfYear, subDays, startOfMonth } from 'date-fns';
 import { 
   getIncomeExpenseSummaryNeon, 
   getAllCategoriesNeon, 
@@ -41,9 +41,9 @@ import D3PieChart from './PieChart/D3PieChart';
 import './Summary.css';
 
 const dateRangeOptions = [
+  { value: 'thisMonth', label: 'This Month' },
   { value: 'ytd', label: 'Year to Date' },
   { value: 'last90', label: 'Last 90 Days' },
-  { value: 'last30', label: 'Last 30 Days' },
   { value: 'lastYear', label: 'Last Year' },
   { value: 'all', label: 'All Time' },
 ];
@@ -67,10 +67,10 @@ const Summary = () => {
     const savedRange = localStorage.getItem('summary-date-range') || 'ytd';
     const now = new Date();
     switch (savedRange) {
+      case 'thisMonth':
+        return startOfMonth(now);
       case 'ytd':
         return startOfYear(now);
-      case 'last30':
-        return subDays(now, 30);
       case 'last90':
         return subDays(now, 90);
       case 'lastYear':
@@ -89,8 +89,8 @@ const Summary = () => {
     const savedRange = localStorage.getItem('summary-date-range') || 'ytd';
     const now = new Date();
     switch (savedRange) {
+      case 'thisMonth':
       case 'ytd':
-      case 'last30':
       case 'last90':
         return now;
       case 'lastYear':
@@ -360,10 +360,10 @@ const Summary = () => {
   const getDateRangeForSelection = async (selection: string): Promise<{ start?: Date, end?: Date }> => {
     const now = new Date();
     switch (selection) {
+      case 'thisMonth':
+        return { start: startOfMonth(now), end: now };
       case 'ytd':
         return { start: startOfYear(now), end: now };
-      case 'last30':
-        return { start: subDays(now, 30), end: now };
       case 'last90':
         return { start: subDays(now, 90), end: now };
       case 'lastYear':

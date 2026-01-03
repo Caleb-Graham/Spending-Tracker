@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useAuth } from '../../lib/auth';
-import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, getUserAccountId, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
+import { useAuth } from '../../utils/auth';
+import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
+import { getUserAccountId } from '../../utils/accountUtils';
+import { getLocalToday } from '../../utils/dateUtils';
 import {
   Table,
   TableBody,
@@ -31,7 +33,8 @@ import {
   Snackbar,
   Switch,
   Avatar,
-  Tooltip
+  Tooltip,
+  useTheme
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -44,6 +47,8 @@ type SortDirection = 'asc' | 'desc';
 
 const Transactions = () => {
   const { user, isAuthenticated, getAccessToken } = useAuth();
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accountId, setAccountId] = useState<number | null>(null);
@@ -86,7 +91,7 @@ const Transactions = () => {
   // Create transaction dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createFormData, setCreateFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalToday(),
     note: '',
     amount: '',
     categoryId: '',
@@ -586,7 +591,7 @@ const Transactions = () => {
 
   const handleCreateOpen = () => {
     setCreateFormData({
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalToday(),
       note: '',
       amount: '',
       categoryId: '',
@@ -601,7 +606,7 @@ const Transactions = () => {
   const handleCreateClose = () => {
     setCreateDialogOpen(false);
     setCreateFormData({
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalToday(),
       note: '',
       amount: '',
       categoryId: '',
@@ -1017,22 +1022,24 @@ const Transactions = () => {
         {/* Edit Transaction Dialog */}
         <Dialog open={editDialogOpen} onClose={handleEditClose} maxWidth="sm" fullWidth>
           <DialogTitle>Edit Transaction</DialogTitle>
-          <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
               label="Date"
               type="date"
               value={editFormData.date}
               onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
               fullWidth
+              sx={{
+                mt: 1,
+                '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                  cursor: 'pointer'
+                }
+              }}
               slotProps={{
                 inputLabel: { shrink: true },
-                input: {
-                  sx: {
-                    '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                      filter: 'invert(1)',
-                      opacity: 0.7,
-                      cursor: 'pointer'
-                    }
+                htmlInput: {
+                  style: {
+                    colorScheme: isDarkMode ? 'dark' : 'light'
                   }
                 }
               }}
@@ -1178,22 +1185,24 @@ const Transactions = () => {
         {/* Create Transaction Dialog */}
         <Dialog open={createDialogOpen} onClose={handleCreateClose} maxWidth="sm" fullWidth>
           <DialogTitle>New Transaction</DialogTitle>
-          <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
               label="Date"
               type="date"
               value={createFormData.date}
               onChange={(e) => setCreateFormData({ ...createFormData, date: e.target.value })}
               fullWidth
+              sx={{
+                mt: 1,
+                '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                  cursor: 'pointer'
+                }
+              }}
               slotProps={{
                 inputLabel: { shrink: true },
-                input: {
-                  sx: {
-                    '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                      filter: 'invert(1)',
-                      opacity: 0.7,
-                      cursor: 'pointer'
-                    }
+                htmlInput: {
+                  style: {
+                    colorScheme: isDarkMode ? 'dark' : 'light'
                   }
                 }
               }}

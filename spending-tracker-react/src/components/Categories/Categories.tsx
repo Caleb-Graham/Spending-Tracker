@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../utils/auth';
 import {
   Typography,
   Button,

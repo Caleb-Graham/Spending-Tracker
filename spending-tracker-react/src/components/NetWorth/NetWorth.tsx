@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../utils/auth';
 import {
   Typography,
   Paper,
@@ -25,7 +25,7 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import { getLocalToday, formatDate } from '../../utils/dateUtils';
 import { 
   getNetWorthCategorySummaryNeon,
   getNetWorthDetailNeon,
@@ -63,7 +63,7 @@ const NetWorth: React.FC = () => {
   // Add snapshot modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingSnapshot, setEditingSnapshot] = useState<NetWorthSnapshot | null>(null);
-  const [newSnapshotDate, setNewSnapshotDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [newSnapshotDate, setNewSnapshotDate] = useState<string>(getLocalToday());
   const [newSnapshotNotes, setNewSnapshotNotes] = useState('');
   const [newSnapshotAssets, setNewSnapshotAssets] = useState<CreateNetWorthAssetRequest[]>([]);
   const [inputValues, setInputValues] = useState<Record<number, string>>({});
@@ -393,7 +393,7 @@ const NetWorth: React.FC = () => {
       // Reset form and close modal
       setIsAddModalOpen(false);
       setEditingSnapshot(null);
-      setNewSnapshotDate(new Date().toISOString().split('T')[0]);
+      setNewSnapshotDate(getLocalToday());
       setNewSnapshotNotes('');
       setInputValues({});
       // Reset to account templates with zero values, filtering out archived accounts
@@ -409,7 +409,7 @@ const NetWorth: React.FC = () => {
   const handleCloseModal = () => {
     setIsAddModalOpen(false);
     setEditingSnapshot(null);
-    setNewSnapshotDate(new Date().toISOString().split('T')[0]);
+    setNewSnapshotDate(getLocalToday());
     setNewSnapshotNotes('');
     setInputValues({});
     // Reset to account templates with zero values, filtering out archived accounts
@@ -471,7 +471,7 @@ const NetWorth: React.FC = () => {
   // Transform data for chart with calculated changes
   const snapshotsWithChanges = calculateChanges(snapshots);
   const chartData = snapshotsWithChanges.map(snapshot => ({
-    date: format(parseISO(snapshot.date), 'MMM yyyy'),
+    date: formatDate(snapshot.date, 'MMM yyyy'),
     fullDate: snapshot.date,
     netWorth: snapshot.netWorth || 0,
     formattedNetWorth: `$${(snapshot.netWorth || 0).toLocaleString('en-US', { 
@@ -619,7 +619,7 @@ const NetWorth: React.FC = () => {
             <Box display="flex" alignItems="center" gap={3} flexWrap="wrap">
               <Box>
                 <Typography variant="h5" fontWeight="bold" gutterBottom>
-                  {format(parseISO(selectedSnapshot.date), 'MMMM yyyy')}
+                  {formatDate(selectedSnapshot.date, 'MMMM yyyy')}
                 </Typography>
                 <Typography variant="h4" color="primary" fontWeight="bold">
                   {formatCurrency(selectedSnapshot.netWorth || 0)}
@@ -748,7 +748,7 @@ const NetWorth: React.FC = () => {
                       onClick={() => handleSnapshotSelect(snapshot)}
                     >
                       <TableCell>
-                        {format(parseISO(snapshot.date), 'MMM yyyy')}
+                        {formatDate(snapshot.date, 'MMM yyyy')}
                       </TableCell>
                       <TableCell align="right">
                         {formatCurrency(snapshot.netWorth || 0)}

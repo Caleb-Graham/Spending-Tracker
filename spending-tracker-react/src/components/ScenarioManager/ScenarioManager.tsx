@@ -25,7 +25,7 @@ import {
   Delete as DeleteIcon,
   FileCopy as CopyIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../utils/auth';
 import { type Scenario, type CreateScenarioRequest, type DuplicateScenarioRequest } from '../../services';
 import { createScenarioNeon, updateScenarioNeon, deleteScenarioNeon, duplicateScenarioNeon } from '../../services/scenarioService';
 

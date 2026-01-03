@@ -27,7 +27,7 @@ import {
   PieChart as PieChartIcon,
   Settings as SettingsIcon
 } from '@mui/icons-material';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../utils/auth';
 import { type Category, type CategoryMapping, type Scenario } from '../../services';
 import { getAllCategoryDataNeon } from '../../services/categoryService';
 import { getPlanningBudgetsNeon, savePlanningBudgetNeon, deletePlanningBudgetNeon } from '../../services/planningService';

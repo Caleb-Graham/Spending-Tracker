@@ -1,24 +1,5 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
-
-// Helper function to get user's account ID
-export const getUserAccountId = async (
-  accessToken: string
-): Promise<number> => {
-  const pg = PostgrestClientFactory.createClient(accessToken);
-
-  const { data, error } = await pg
-    .from("AccountMembers")
-    .select("AccountId")
-    .eq("Status", "active")
-    .limit(1)
-    .single();
-
-  if (error || !data) {
-    throw new Error("Failed to get user account");
-  }
-
-  return data.AccountId;
-};
+import { getUserAccountId } from "../utils/accountUtils";
 
 export interface Transaction {
   transactionId: number;

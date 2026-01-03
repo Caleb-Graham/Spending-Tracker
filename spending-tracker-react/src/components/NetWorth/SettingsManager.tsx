@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../utils/auth';
 import {
   Dialog,
   DialogTitle,
@@ -22,7 +22,8 @@ import {
   Typography,
   Alert,
   Tabs,
-  Tab
+  Tab,
+  Switch
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -47,6 +48,7 @@ import {
   type NetWorthCategoryWithId,
   type CreateNetWorthCategoryRequest
 } from '../../services';
+import { getUserAccountId } from '../../utils/accountUtils';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -85,14 +87,16 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
   const { isAuthenticated, getAccessToken } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [userAccountId, setUserAccountId] = useState<number | null>(null);
   
   // ============ ACCOUNTS STATE ============
   const [accounts, setAccounts] = useState<NetWorthAccountWithId[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<NetWorthAccountWithId | null>(null);
-  const [accountFormData, setAccountFormData] = useState<CreateNetWorthAccountRequest>({
+  const [accountFormData, setAccountFormData] = useState<Omit<CreateNetWorthAccountRequest, 'accountId'>>({
     name: '',
     category: '',
     isAsset: true,
@@ -115,10 +119,24 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
 
   useEffect(() => {
     if (open) {
+      loadUserAccountId();
       loadAccounts();
       loadCategories();
     }
   }, [open]);
+
+  // Fetch user's account ID
+  const loadUserAccountId = async () => {
+    try {
+      if (!isAuthenticated) return;
+      const accessToken = await getAccessToken();
+      if (!accessToken) return;
+      const accountId = await getUserAccountId(accessToken);
+      setUserAccountId(accountId);
+    } catch (err: any) {
+      console.error('Failed to load user account ID:', err);
+    }
+  };
 
   // ============ ACCOUNTS FUNCTIONS ============
   const loadAccounts = async () => {
@@ -189,6 +207,11 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
         return;
       }
 
+      if (!userAccountId) {
+        setError('Account not loaded yet. Please try again.');
+        return;
+      }
+
       if (!accountFormData.name.trim()) {
         setError('Account name is required');
         return;
@@ -210,7 +233,10 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
         const updated = await updateNetWorthAccountNeon(accessToken, editingAccount.accountId, accountFormData);
         setAccounts(accounts.map(a => a.accountId === updated.accountId ? updated : a));
       } else {
-        const created = await createNetWorthAccountNeon(accessToken, accountFormData);
+        const created = await createNetWorthAccountNeon(accessToken, {
+          ...accountFormData,
+          accountId: userAccountId
+        });
         setAccounts([...accounts, created]);
         
         if (!accountCategories.includes(accountFormData.category)) {
@@ -317,14 +343,18 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
 
   const accountsByCategory = React.useMemo(() => {
     const grouped = new Map<string, NetWorthAccountWithId[]>();
-    accounts.forEach(account => {
+    const filteredAccounts = showArchived 
+      ? accounts 
+      : accounts.filter(account => !account.isArchived);
+    
+    filteredAccounts.forEach(account => {
       if (!grouped.has(account.category)) {
         grouped.set(account.category, []);
       }
       grouped.get(account.category)!.push(account);
     });
     return grouped;
-  }, [accounts]);
+  }, [accounts, showArchived]);
 
   // ============ CATEGORIES FUNCTIONS ============
   const loadCategories = async () => {
@@ -479,7 +509,17 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
 
           {/* Accounts Tab */}
           <TabPanel value={tabValue} index={0}>
-            <Box display="flex" justifyContent="flex-end" mb={2}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showArchived}
+                    onChange={(e) => setShowArchived(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Show Archived"
+              />
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}

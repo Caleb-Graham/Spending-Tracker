@@ -52,6 +52,7 @@ export interface CreateNetWorthAccountRequest {
   category: string;
   isAsset: boolean;
   notes?: string;
+  accountId: number;
 }
 
 export interface CreateNetWorthAssetRequest {
@@ -407,7 +408,9 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
 // OPTIMIZED: Get all unique accounts from all snapshots in one query
 export const getAllNetWorthAccountTemplatesNeon = async (
   accessToken: string
-): Promise<(CreateNetWorthAccountRequest & { isArchived?: boolean })[]> => {
+): Promise<
+  (Omit<CreateNetWorthAccountRequest, "accountId"> & { isArchived?: boolean })[]
+> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
   const { data, error } = await pg
@@ -465,27 +468,46 @@ export const createNetWorthAccountNeon = async (
 ): Promise<NetWorthAccountWithId> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
+  // Look up the category ID by name and AccountId
+  const { data: categoryData, error: categoryError } = await pg
+    .from("NetWorthCategories")
+    .select("CategoryId")
+    .eq("Name", request.category)
+    .eq("AccountId", request.accountId)
+    .single();
+
+  if (categoryError || !categoryData) {
+    throw new Error(
+      `Category "${request.category}" not found. Please create the category first.`
+    );
+  }
+
   const { data, error } = await pg
     .from("NetWorthAccounts")
     .insert([
       {
         Name: request.name,
-        Category: request.category,
+        NetWorthCategoryId: categoryData.CategoryId,
         IsAsset: request.isAsset,
         Notes: request.notes || "",
+        AccountId: request.accountId,
       },
     ])
-    .select("AccountId, Name, Category, IsAsset")
+    .select("NetWorthAccountId, Name, IsAsset, NetWorthCategories(Name)")
     .single();
 
   if (error) {
     throw new Error(error.message || "Failed to create account");
   }
 
+  const netWorthCategory = Array.isArray(data.NetWorthCategories)
+    ? data.NetWorthCategories[0]
+    : data.NetWorthCategories;
+
   return {
-    accountId: data.AccountId,
+    accountId: data.NetWorthAccountId,
     name: data.Name,
-    category: data.Category,
+    category: netWorthCategory?.Name || request.category,
     isAsset: data.IsAsset,
   };
 };
@@ -500,9 +522,24 @@ export const updateNetWorthAccountNeon = async (
 
   const updateData: any = {};
   if (request.name) updateData.Name = request.name;
-  if (request.category) updateData.Category = request.category;
   if (request.isAsset !== undefined) updateData.IsAsset = request.isAsset;
   if (request.notes) updateData.Notes = request.notes;
+
+  // If category is being updated, look up the category ID
+  if (request.category) {
+    const { data: categoryData, error: categoryError } = await pg
+      .from("NetWorthCategories")
+      .select("CategoryId")
+      .eq("Name", request.category)
+      .single();
+
+    if (categoryError || !categoryData) {
+      throw new Error(
+        `Category "${request.category}" not found. Please create the category first.`
+      );
+    }
+    updateData.NetWorthCategoryId = categoryData.CategoryId;
+  }
 
   const { data, error } = await pg
     .from("NetWorthAccounts")

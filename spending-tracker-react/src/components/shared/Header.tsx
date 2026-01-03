@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../utils/auth';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   AppBar, 

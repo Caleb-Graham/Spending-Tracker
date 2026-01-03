@@ -1,5 +1,5 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
-import { getUserAccountId } from "./transactionService";
+import { getUserAccountId } from "../utils/accountUtils";
 
 export interface CategorySummary {
   categoryId: number;
