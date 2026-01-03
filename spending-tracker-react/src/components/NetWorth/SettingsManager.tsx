@@ -113,7 +113,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
   const [categoryFormData, setCategoryFormData] = useState<CreateNetWorthCategoryRequest>({
     name: '',
     isAsset: true,
-    sortOrder: 0,
     notes: ''
   });
 
@@ -387,7 +386,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
     setCategoryFormData({
       name: '',
       isAsset: true,
-      sortOrder: categories.length > 0 ? Math.max(...categories.map(c => c.sortOrder)) + 10 : 0,
       notes: ''
     });
     setIsCategoryModalOpen(true);
@@ -398,7 +396,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
     setCategoryFormData({
       name: category.name,
       isAsset: category.isAsset,
-      sortOrder: category.sortOrder,
       notes: category.notes || ''
     });
     setIsCategoryModalOpen(true);
@@ -410,7 +407,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
     setCategoryFormData({
       name: '',
       isAsset: true,
-      sortOrder: 0,
       notes: ''
     });
   };
@@ -662,7 +658,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
                     <TableRow>
                       <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>Type</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Sort Order</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>Notes</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
                     </TableRow>
@@ -671,7 +666,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
                     {assetCategories.length > 0 && (
                       <>
                         <TableRow sx={{ backgroundColor: 'success.light', opacity: 0.3 }}>
-                          <TableCell colSpan={5} sx={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'success.dark' }}>
+                          <TableCell colSpan={4} sx={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'success.dark' }}>
                             Assets
                           </TableCell>
                         </TableRow>
@@ -681,7 +676,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
                             <TableCell>
                               <span style={{ color: '#4CAF50', fontWeight: 'bold' }}>Asset</span>
                             </TableCell>
-                            <TableCell>{category.sortOrder}</TableCell>
                             <TableCell>{category.notes}</TableCell>
                             <TableCell align="right">
                               <IconButton
@@ -710,7 +704,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
                     {liabilityCategories.length > 0 && (
                       <>
                         <TableRow sx={{ backgroundColor: 'error.light', opacity: 0.3 }}>
-                          <TableCell colSpan={5} sx={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'error.dark' }}>
+                          <TableCell colSpan={4} sx={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'error.dark' }}>
                             Liabilities
                           </TableCell>
                         </TableRow>
@@ -720,7 +714,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
                             <TableCell>
                               <span style={{ color: '#F44336', fontWeight: 'bold' }}>Liability</span>
                             </TableCell>
-                            <TableCell>{category.sortOrder}</TableCell>
                             <TableCell>{category.notes}</TableCell>
                             <TableCell align="right">
                               <IconButton
@@ -866,17 +859,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
             />
 
             <TextField
-              label="Sort Order"
-              type="number"
-              value={categoryFormData.sortOrder || 0}
-              onChange={(e) => setCategoryFormData({ ...categoryFormData, sortOrder: parseInt(e.target.value) || 0 })}
-              fullWidth
-              disabled={isSavingCategory}
-              placeholder="Order in which categories appear"
-              helperText="Lower numbers appear first"
-            />
 
-            <TextField
               label="Notes (Optional)"
               value={categoryFormData.notes || ''}
               onChange={(e) => setCategoryFormData({ ...categoryFormData, notes: e.target.value })}

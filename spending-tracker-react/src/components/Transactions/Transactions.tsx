@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../utils/auth';
-import { getTransactionsNeon, getAllCategoriesNeon, uploadTransactionsNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
+import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
 import { getUserAccountId } from '../../utils/accountUtils';
 import { getLocalToday } from '../../utils/dateUtils';
 import {
@@ -53,11 +53,9 @@ const Transactions = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [accountId, setAccountId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Filter states
   const [typeFilter, setTypeFilter] = useState<string>('all'); // 'all', 'income', 'expense'
@@ -296,49 +294,6 @@ const Transactions = () => {
     if (startDate || endDate) count++;
     if (showFutureOnly) count++;
     return count;
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !isAuthenticated) {
-      return;
-    }
-
-    setIsUploading(true);
-    setError(null);
-    try {
-      // Get JWT token from Neon Auth
-      const accessToken = await getAccessToken();
-
-      if (!accessToken) {
-        throw new Error('No access token available');
-      }
-
-      // Upload CSV via Neon Data API
-      const result = await uploadTransactionsNeon(file, accessToken);
-
-      // Show result summary
-      alert(
-        `Upload complete!\n\n` +
-        `Total records: ${result.totalRecords}\n` +
-        `New transactions added: ${result.newTransactionsAdded}\n` +
-        `Duplicates skipped: ${result.duplicatesSkipped}`
-      );
-
-      // Reload transactions after successful upload
-      await loadTransactions();
-
-      // Clear file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setError('Failed to upload CSV: ' + errorMessage);
-      console.error('Error uploading file:', error);
-    } finally {
-      setIsUploading(false);
-    }
   };
 
   const handleEditClick = async (transaction: Transaction) => {
@@ -727,27 +682,12 @@ const Transactions = () => {
           <Typography variant="h4" component="h1" gutterBottom>
             Transactions
           </Typography>
-          <div className="upload-section">
-            <input
-              type="file"
-              accept=".csv"
-              style={{ display: 'none' }}
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-            />
+          <div>
             <Button
               variant="contained"
               onClick={() => handleCreateOpen()}
-              sx={{ mr: 1 }}
             >
               + New Transaction
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || !isAuthenticated}
-            >
-              {isUploading ? 'Uploading...' : 'Import Transactions'}
             </Button>
           </div>
         </div>
@@ -920,7 +860,7 @@ const Transactions = () => {
                 <TableRow>
                   <TableCell colSpan={8} align="center">
                     {transactions.length === 0 
-                      ? "No transactions found. Upload a CSV file to get started."
+                      ? "No transactions found. Create one to get started."
                       : "No transactions match the current filters."
                     }
                   </TableCell>
