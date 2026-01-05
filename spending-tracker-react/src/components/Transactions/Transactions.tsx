@@ -273,6 +273,9 @@ const Transactions = () => {
       filteredCategories = categories.filter(category => relevantCategories.has(category.categoryId));
     }
 
+    // Filter to only show child categories (those with a parentCategoryId)
+    filteredCategories = filteredCategories.filter(category => category.parentCategoryId !== null && category.parentCategoryId !== undefined);
+
     // Sort categories alphabetically by name
     return filteredCategories.sort((a, b) => a.name.localeCompare(b.name));
   };
