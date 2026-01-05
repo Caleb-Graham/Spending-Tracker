@@ -40,6 +40,7 @@ export interface CreateNetWorthSnapshotRequest {
   date: string;
   notes?: string;
   accounts: CreateNetWorthAccountValueRequest[];
+  accountId: number;
 }
 
 export interface CreateNetWorthAccountValueRequest {
@@ -250,6 +251,7 @@ export const createNetWorthSnapshotNeon = async (
       {
         Date: request.date,
         Notes: request.notes || "",
+        AccountId: request.accountId,
       },
     ])
     .select("SnapshotId, Date, Notes");
@@ -268,8 +270,9 @@ export const createNetWorthSnapshotNeon = async (
   if (request.accounts && request.accounts.length > 0) {
     const netWorthRows = request.accounts.map((account) => ({
       SnapshotId: snapshot.SnapshotId,
-      AccountId: account.accountId,
+      NetWorthAccountId: account.accountId,
       Value: account.value,
+      AccountId: request.accountId,
     }));
 
     const { error: insertError } = await pg
@@ -355,7 +358,7 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
       `
       SnapshotId,
       Value,
-      AccountId
+      NetWorthAccountId
     `
     )
     .in("SnapshotId", snapshotIds);
@@ -367,16 +370,16 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
   // Get all accounts to determine which are assets vs liabilities
   const { data: accountsData, error: accountsError } = await pg
     .from("NetWorthAccounts")
-    .select("AccountId, IsAsset");
+    .select("NetWorthAccountId, IsAsset");
 
   if (accountsError) {
     throw new Error(accountsError.message || "Failed to fetch accounts");
   }
 
-  // Create a map of accountId to isAsset
+  // Create a map of NetWorthAccountId to isAsset
   const accountMap = new Map<number, boolean>();
   (accountsData || []).forEach((account: any) => {
-    accountMap.set(account.AccountId, account.IsAsset);
+    accountMap.set(account.NetWorthAccountId, account.IsAsset);
   });
 
   // Calculate net worth for each snapshot
@@ -409,13 +412,18 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
 export const getAllNetWorthAccountTemplatesNeon = async (
   accessToken: string
 ): Promise<
-  (Omit<CreateNetWorthAccountRequest, "accountId"> & { isArchived?: boolean })[]
+  (Omit<CreateNetWorthAccountRequest, "accountId"> & {
+    accountId?: number;
+    isArchived?: boolean;
+  })[]
 > => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
   const { data, error } = await pg
     .from("NetWorthAccounts")
-    .select("Name, IsAsset, IsArchived, NetWorthCategories(Name)")
+    .select(
+      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)"
+    )
     .order("Name");
 
   if (error) {
@@ -423,6 +431,7 @@ export const getAllNetWorthAccountTemplatesNeon = async (
   }
 
   return (data || []).map((row: any) => ({
+    accountId: row.NetWorthAccountId,
     name: row.Name,
     category: row.NetWorthCategories?.Name || "Uncategorized",
     isAsset: row.IsAsset,
@@ -443,7 +452,9 @@ export const getAllNetWorthAccountsNeon = async (
 
   let query = pg
     .from("NetWorthAccounts")
-    .select("AccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)")
+    .select(
+      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)"
+    )
     .order("Name");
 
   const { data, error } = await query;
@@ -453,7 +464,7 @@ export const getAllNetWorthAccountsNeon = async (
   }
 
   return (data || []).map((row: any) => ({
-    accountId: row.AccountId,
+    accountId: row.NetWorthAccountId,
     name: row.Name,
     category: row.NetWorthCategories?.Name || "Uncategorized",
     isAsset: row.IsAsset,
@@ -544,8 +555,10 @@ export const updateNetWorthAccountNeon = async (
   const { data, error } = await pg
     .from("NetWorthAccounts")
     .update(updateData)
-    .eq("AccountId", accountId)
-    .select("AccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)")
+    .eq("NetWorthAccountId", accountId)
+    .select(
+      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)"
+    )
     .single();
 
   if (error) {
@@ -557,7 +570,7 @@ export const updateNetWorthAccountNeon = async (
     : data.NetWorthCategories;
 
   return {
-    accountId: data.AccountId,
+    accountId: data.NetWorthAccountId,
     name: data.Name,
     category: netWorthCategory?.Name || "Uncategorized",
     isAsset: data.IsAsset,
@@ -575,7 +588,7 @@ export const archiveNetWorthAccountNeon = async (
   const { error } = await pg
     .from("NetWorthAccounts")
     .update({ IsArchived: true })
-    .eq("AccountId", accountId);
+    .eq("NetWorthAccountId", accountId);
 
   if (error) {
     throw new Error(error.message || "Failed to archive account");
@@ -592,7 +605,7 @@ export const unarchiveNetWorthAccountNeon = async (
   const { error } = await pg
     .from("NetWorthAccounts")
     .update({ IsArchived: false })
-    .eq("AccountId", accountId);
+    .eq("NetWorthAccountId", accountId);
 
   if (error) {
     throw new Error(error.message || "Failed to unarchive account");
@@ -609,7 +622,7 @@ export const deleteNetWorthAccountNeon = async (
   const { error } = await pg
     .from("NetWorthAccounts")
     .delete()
-    .eq("AccountId", accountId);
+    .eq("NetWorthAccountId", accountId);
 
   if (error) {
     throw new Error(error.message || "Failed to delete account");
@@ -633,7 +646,7 @@ export const getAccountValuesOverTimeNeon = async (
   let query = pg
     .from("NetWorth")
     .select("NetWorthSnapshots(Date), Value")
-    .eq("AccountId", accountId);
+    .eq("NetWorthAccountId", accountId);
 
   if (startDate) {
     query = query.gte("NetWorthSnapshots.Date", startDate);

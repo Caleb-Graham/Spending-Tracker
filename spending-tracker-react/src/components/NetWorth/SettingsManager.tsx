@@ -23,7 +23,11 @@ import {
   Alert,
   Tabs,
   Tab,
-  Switch
+  Switch,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -765,18 +769,26 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
               placeholder="e.g., Checking, Tesla, Credit Card"
             />
 
-            <TextField
-              label="Category"
-              value={accountFormData.category}
-              onChange={(e) => setAccountFormData({ ...accountFormData, category: e.target.value })}
-              fullWidth
-              disabled={isSavingAccount}
-              placeholder="e.g., Bank Accounts, Investments, Debt"
-            />
+            <FormControl fullWidth disabled={isSavingAccount}>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={accountFormData.category}
+                label="Category"
+                onChange={(e) => setAccountFormData({ ...accountFormData, category: e.target.value })}
+              >
+                {categories
+                  .filter(cat => cat.isAsset === accountFormData.isAsset)
+                  .map((category) => (
+                    <MenuItem key={category.categoryId} value={category.name}>
+                      {category.name}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
 
             <FormControlLabel
               control={
-                <Checkbox
+                <Switch
                   checked={accountFormData.isAsset}
                   onChange={(e) => setAccountFormData({ ...accountFormData, isAsset: e.target.checked })}
                   disabled={isSavingAccount}

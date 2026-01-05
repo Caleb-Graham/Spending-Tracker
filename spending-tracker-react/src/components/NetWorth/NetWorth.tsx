@@ -39,6 +39,7 @@ import {
   type CreateNetWorthAssetRequest
 } from '../../services';
 import { useDateRange } from '../../hooks/useDateRange';
+import { getUserAccountId } from '../../utils/accountUtils';
 import DateRangeSelector from '../shared/DateRangeSelector';
 import SettingsManager from './SettingsManager';
 import './NetWorth.css';
@@ -68,6 +69,7 @@ const NetWorth: React.FC = () => {
   const [newSnapshotAssets, setNewSnapshotAssets] = useState<CreateNetWorthAssetRequest[]>([]);
   const [inputValues, setInputValues] = useState<Record<number, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [userAccountId, setUserAccountId] = useState<number | null>(null);
 
   // Get access token for date range hook
   const [accessToken, setAccessToken] = useState<string>();
@@ -78,6 +80,13 @@ const NetWorth: React.FC = () => {
         const token = await getAccessToken();
         if (token) {
           setAccessToken(token);
+          // Also fetch user account ID
+          try {
+            const accountId = await getUserAccountId(token);
+            setUserAccountId(accountId);
+          } catch (err) {
+            console.error('Failed to get user account ID:', err);
+          }
         }
       }
     };
@@ -346,6 +355,11 @@ const NetWorth: React.FC = () => {
         return;
       }
 
+      if (!userAccountId) {
+        console.error('No user account ID available');
+        return;
+      }
+
       const accessToken = await getAccessToken();
 
       if (!accessToken) {
@@ -382,7 +396,8 @@ const NetWorth: React.FC = () => {
       const request: CreateNetWorthSnapshotRequest = {
         date: newSnapshotDate,
         notes: newSnapshotNotes || undefined,
-        accounts: accountValues
+        accounts: accountValues,
+        accountId: userAccountId
       };
 
       await createNetWorthSnapshotNeon(accessToken, request);
@@ -874,7 +889,7 @@ const NetWorth: React.FC = () => {
               ))}
 
               {/* Total Net Worth Display */}
-              <Box mt={2} p={2} bgcolor="grey.100" borderRadius={1}>
+              <Box mt={2} p={2} bgcolor={isDark ? 'grey.800' : 'grey.100'} borderRadius={1}>
                 <Typography variant="h6" align="center">
                   Total Net Worth: ${calculateTotalNetWorth().toLocaleString('en-US', { 
                     minimumFractionDigits: 2, 

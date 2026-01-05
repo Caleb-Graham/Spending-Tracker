@@ -596,11 +596,6 @@ const Transactions = () => {
         return;
       }
 
-      if (!createFormData.note.trim()) {
-        setNotification({ message: 'Please enter a description', severity: 'error' });
-        return;
-      }
-
       if (createFormData.isRecurring && !createFormData.categoryId) {
         setNotification({ message: 'Please select a category for recurring transactions', severity: 'error' });
         return;
