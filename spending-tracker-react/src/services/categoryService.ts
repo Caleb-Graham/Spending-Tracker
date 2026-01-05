@@ -24,6 +24,7 @@ export interface Category {
   type: string;
   parentCategoryId?: number;
   parentCategoryName?: string;
+  isArchived?: boolean;
 }
 
 export interface CategoryMapping {
@@ -31,6 +32,7 @@ export interface CategoryMapping {
   categoryName: string;
   parentCategoryId: number;
   parentCategoryName: string;
+  isArchived?: boolean;
 }
 
 export interface CreateCategoryMappingRequest {
@@ -415,6 +417,7 @@ export const getAllCategoriesNeon = async (
       Name,
       Type,
       ParentCategoryId,
+      IsArchived,
       ParentCategory:Categories!ParentCategoryId(Name)
     `
     )
@@ -432,6 +435,7 @@ export const getAllCategoriesNeon = async (
       type: row.Type,
       parentCategoryId: row.ParentCategoryId,
       parentCategoryName: row.ParentCategory?.Name,
+      isArchived: row.IsArchived || false,
     })) || [];
 
   return categories;
@@ -543,7 +547,7 @@ export const getCategoryMappingsNeon = async (
   // First, fetch all child categories (those with a ParentCategoryId)
   let query = pg
     .from("Categories")
-    .select("*")
+    .select("CategoryId,Name,Type,ParentCategoryId,IsArchived")
     .not("ParentCategoryId", "is", null);
 
   // Filter by type if provided
@@ -563,7 +567,9 @@ export const getCategoryMappingsNeon = async (
   }
 
   // Now fetch all parent categories to get their names
-  const { data: allCategories } = await pg.from("Categories").select("*");
+  const { data: allCategories } = await pg
+    .from("Categories")
+    .select("CategoryId,Name");
 
   const categoryNameMap = new Map();
   allCategories?.forEach((cat: any) => {
@@ -575,6 +581,7 @@ export const getCategoryMappingsNeon = async (
     categoryName: row.Name,
     parentCategoryId: row.ParentCategoryId,
     parentCategoryName: categoryNameMap.get(row.ParentCategoryId) || "Unknown",
+    isArchived: row.IsArchived === true,
   }));
 };
 
@@ -805,5 +812,39 @@ export const deleteCategoryMappingNeon = async (
 
   if (error) {
     throw new Error(error.message || "Failed to delete category mapping");
+  }
+};
+
+// Archive a category (soft delete - hides from view but preserves data)
+export const archiveCategoryNeon = async (
+  accessToken: string,
+  categoryId: number
+): Promise<void> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { error } = await pg
+    .from("Categories")
+    .update({ IsArchived: true })
+    .eq("CategoryId", categoryId);
+
+  if (error) {
+    throw new Error(error.message || "Failed to archive category");
+  }
+};
+
+// Unarchive a category
+export const unarchiveCategoryNeon = async (
+  accessToken: string,
+  categoryId: number
+): Promise<void> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  const { error } = await pg
+    .from("Categories")
+    .update({ IsArchived: false })
+    .eq("CategoryId", categoryId);
+
+  if (error) {
+    throw new Error(error.message || "Failed to unarchive category");
   }
 };

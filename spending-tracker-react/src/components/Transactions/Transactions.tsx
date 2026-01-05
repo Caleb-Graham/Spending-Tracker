@@ -283,8 +283,12 @@ const Transactions = () => {
       filteredCategories = categories.filter(category => relevantCategories.has(category.categoryId));
     }
 
-    // Filter to only show child categories (those with a parentCategoryId)
-    filteredCategories = filteredCategories.filter(category => category.parentCategoryId !== null && category.parentCategoryId !== undefined);
+    // Filter to only show non-archived child categories (those with a parentCategoryId)
+    filteredCategories = filteredCategories.filter(category => 
+      category.parentCategoryId !== null && 
+      category.parentCategoryId !== undefined &&
+      !category.isArchived
+    );
 
     // Sort categories alphabetically by name
     return filteredCategories.sort((a, b) => a.name.localeCompare(b.name));
@@ -294,12 +298,13 @@ const Transactions = () => {
   const getCategoriesForForm = (isIncome: boolean) => {
     const categoryType = isIncome ? 'Income' : 'Expense';
     
-    // Filter to only show child categories matching the transaction type
+    // Filter to only show non-archived child categories matching the transaction type
     return categories
       .filter(category => 
         category.type === categoryType && 
         category.parentCategoryId !== null && 
-        category.parentCategoryId !== undefined
+        category.parentCategoryId !== undefined &&
+        !category.isArchived
       )
       .sort((a, b) => a.name.localeCompare(b.name));
   };

@@ -26,7 +26,9 @@ import {
   ListItemText,
   Paper,
   Tooltip,
-  useTheme
+  useTheme,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -36,7 +38,9 @@ import {
   ChevronRight as ChevronRightIcon,
   Label as LabelIcon,
   Warning as WarningIcon,
-  DragIndicator as DragIcon
+  DragIndicator as DragIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -49,6 +53,8 @@ import {
   createParentCategoryNeon,
   updateParentCategoryNeon,
   deleteParentCategoryNeon,
+  archiveCategoryNeon,
+  unarchiveCategoryNeon,
   type CategoryMapping as APICategoryMapping, 
   type Category
 } from '../../services';
@@ -59,6 +65,7 @@ interface CategoryMapping {
   categoryName: string;
   parentCategory: string;
   parentCategoryId: number;
+  isArchived?: boolean;
 }
 
 interface DialogState {
@@ -93,7 +100,9 @@ const NestedCategoryRow: React.FC<{
   onMove: (childId: number, newParentMappingId: number) => void;
   expandedMappings: Set<number>;
   onToggleMapping: (mappingId: number) => void;
-}> = ({ mapping, allMappings, parentCategories, isExpanded, onToggle, onEdit, onDelete, onAddChild, onMove, expandedMappings, onToggleMapping }) => {
+  onArchive: (id: number) => void;
+  onUnarchive: (id: number) => void;
+}> = ({ mapping, allMappings, parentCategories, isExpanded, onToggle, onEdit, onDelete, onAddChild, onMove, expandedMappings, onToggleMapping, onArchive, onUnarchive }) => {
   const theme = useTheme();
   const currentParent = parentCategories.find(p => p.name === mapping.parentCategory);
   const ref = useRef<HTMLDivElement>(null);
@@ -152,23 +161,41 @@ const NestedCategoryRow: React.FC<{
         disablePadding
         sx={{ 
           pl: 4,
-          backgroundColor: isOver ? theme.palette.custom.surfaceHighlight : 'transparent',
+          backgroundColor: isOver ? theme.palette.custom.surfaceHighlight : (mapping.isArchived ? theme.palette.action.disabledBackground : 'transparent'),
           border: isOver ? `2px dashed ${theme.palette.custom.borderActive}` : '2px solid transparent',
           borderRadius: 1,
           transition: 'all 0.2s ease',
+          opacity: mapping.isArchived ? 0.6 : 1,
         }}
         secondaryAction={
           <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <Tooltip title="Add subcategory">
-              <IconButton size="small" color="primary" onClick={(e) => { e.stopPropagation(); onAddChild(); }}>
-                <AddIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Edit">
-              <IconButton size="small" onClick={() => onEdit(mapping)}>
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            {!mapping.isArchived && (
+              <>
+                <Tooltip title="Add subcategory">
+                  <IconButton size="small" color="primary" onClick={(e) => { e.stopPropagation(); onAddChild(); }}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Edit">
+                  <IconButton size="small" onClick={() => onEdit(mapping)}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
+            {mapping.isArchived ? (
+              <Tooltip title="Unarchive">
+                <IconButton size="small" sx={{ color: 'success.main' }} onClick={() => onUnarchive(mapping.id)}>
+                  <UnarchiveIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Archive">
+                <IconButton size="small" sx={{ color: 'warning.main' }} onClick={() => onArchive(mapping.id)}>
+                  <ArchiveIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Delete">
               <IconButton size="small" color="error" onClick={() => onDelete(mapping.id)}>
                 <DeleteIcon fontSize="small" />
@@ -189,7 +216,16 @@ const NestedCategoryRow: React.FC<{
             )}
           </ListItemIcon>
           <ListItemText 
-            primary={mapping.categoryName}
+            primary={
+              <>
+                {mapping.categoryName}
+                {mapping.isArchived && (
+                  <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                    (Archived)
+                  </Typography>
+                )}
+              </>
+            }
             secondary={hasChildren ? `${childrenOfThis.length} ${childrenOfThis.length === 1 ? 'category' : 'categories'}` : undefined}
             primaryTypographyProps={{ variant: 'body2', fontWeight: hasChildren ? 600 : 400 }}
             secondaryTypographyProps={{ variant: 'caption' }}
@@ -220,6 +256,8 @@ const NestedCategoryRow: React.FC<{
                   onMove={onMove}
                   expandedMappings={expandedMappings}
                   onToggleMapping={onToggleMapping}
+                  onArchive={onArchive}
+                  onUnarchive={onUnarchive}
                 />
               ))}
           </List>
@@ -247,6 +285,8 @@ const DroppableParentAccordion: React.FC<{
   onMoveToMapping: (childId: number, newParentMappingId: number) => void;
   expandedMappings: Set<number>;
   onToggleMapping: (mappingId: number) => void;
+  onArchive: (id: number) => void;
+  onUnarchive: (id: number) => void;
 }> = ({ 
   parentCategory, 
   childMappings, 
@@ -263,7 +303,9 @@ const DroppableParentAccordion: React.FC<{
   onMove,
   onMoveToMapping,
   expandedMappings,
-  onToggleMapping
+  onToggleMapping,
+  onArchive,
+  onUnarchive
 }) => {
   const theme = useTheme();
   const hasChildren = childMappings.length > 0;
@@ -365,6 +407,8 @@ const DroppableParentAccordion: React.FC<{
                   onMove={onMoveToMapping}
                   expandedMappings={expandedMappings}
                   onToggleMapping={onToggleMapping}
+                  onArchive={onArchive}
+                  onUnarchive={onUnarchive}
                 />
               ))
           ) : (
@@ -539,6 +583,7 @@ const Categories = () => {
   const [notification, setNotification] = useState<{message: string, severity: 'success' | 'error'} | null>(null);
   const [expandedParents, setExpandedParents] = useState<Set<number>>(new Set());
   const [expandedMappings, setExpandedMappings] = useState<Set<number>>(new Set());
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -583,7 +628,8 @@ const Categories = () => {
         id: m.categoryId,
         categoryName: m.categoryName,
         parentCategory: m.parentCategoryName,
-        parentCategoryId: m.parentCategoryId
+        parentCategoryId: m.parentCategoryId,
+        isArchived: m.isArchived === true
       })));
     } catch (error) {
       console.error('Failed to load category mappings:', error);
@@ -751,6 +797,60 @@ const Categories = () => {
     }
   };
 
+  const handleArchive = async (id: number) => {
+    const mapping = categoryMappings.find(m => m.id === id);
+    if (!window.confirm(`Archive "${mapping?.categoryName}"? It will be hidden from transaction forms but the data will be preserved.`)) {
+      return;
+    }
+
+    try {
+      if (!isAuthenticated) {
+        showNotification('Please sign in to archive', 'error');
+        return;
+      }
+
+      const accessToken = await getAccessToken();
+
+      if (!accessToken) {
+        showNotification('Failed to authenticate', 'error');
+        return;
+      }
+
+      await archiveCategoryNeon(accessToken, id);
+      showNotification('Category archived successfully', 'success');
+      await loadData();
+    } catch (error: any) {
+      showNotification(error.message || 'Archive failed', 'error');
+    }
+  };
+
+  const handleUnarchive = async (id: number) => {
+    const mapping = categoryMappings.find(m => m.id === id);
+    if (!window.confirm(`Unarchive "${mapping?.categoryName}"?`)) {
+      return;
+    }
+
+    try {
+      if (!isAuthenticated) {
+        showNotification('Please sign in to unarchive', 'error');
+        return;
+      }
+
+      const accessToken = await getAccessToken();
+
+      if (!accessToken) {
+        showNotification('Failed to authenticate', 'error');
+        return;
+      }
+
+      await unarchiveCategoryNeon(accessToken, id);
+      showNotification('Category unarchived successfully', 'success');
+      await loadData();
+    } catch (error: any) {
+      showNotification(error.message || 'Unarchive failed', 'error');
+    }
+  };
+
   const handleMoveChild = async (childId: number, newParentId: number) => {
     try {
       if (!isAuthenticated) {
@@ -880,10 +980,22 @@ const Categories = () => {
             </ToggleButtonGroup>
 
             <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.5, ml: 1 }}>
-              {sortedParents.length} categories · {categoryMappings.filter(m => m.parentCategory !== 'Unassigned').length} subcategories
+              {sortedParents.length} categories · {categoryMappings.filter(m => m.parentCategory !== 'Unassigned' && !m.isArchived).length} subcategories
             </Typography>
 
             <Box sx={{ flexGrow: 1 }} />
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Show Archived"
+              sx={{ mr: 2 }}
+            />
 
             <Button
               onClick={() => expandedParents.size > 0 ? collapseAll() : expandAll()}
@@ -923,8 +1035,8 @@ const Categories = () => {
               <DroppableParentAccordion
                 key={parent.categoryId}
                 parentCategory={parent}
-                childMappings={categoryMappings.filter(m => m.parentCategoryId === parent.categoryId)}
-                allMappings={categoryMappings}
+                childMappings={categoryMappings.filter(m => m.parentCategoryId === parent.categoryId && (showArchived || !m.isArchived))}
+                allMappings={showArchived ? categoryMappings : categoryMappings.filter(m => !m.isArchived)}
                 parentCategories={parentCategories}
                 isExpanded={expandedParents.has(parent.categoryId)}
                 onToggle={() => toggleParent(parent.categoryId)}
@@ -938,6 +1050,8 @@ const Categories = () => {
                 onMoveToMapping={handleMoveToMapping}
                 expandedMappings={expandedMappings}
                 onToggleMapping={toggleMapping}
+                onArchive={handleArchive}
+                onUnarchive={handleUnarchive}
               />
             ))}
             
