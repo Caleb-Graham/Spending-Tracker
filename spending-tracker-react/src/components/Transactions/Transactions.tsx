@@ -252,6 +252,16 @@ const Transactions = () => {
     setCategoryFilter('all');
   }, [typeFilter]);
 
+  // Reset category in create form when income/expense type changes
+  useEffect(() => {
+    setCreateFormData(prev => ({ ...prev, categoryId: '' }));
+  }, [createFormData.isIncome]);
+
+  // Reset category in edit form when income/expense type changes
+  useEffect(() => {
+    setEditFormData(prev => ({ ...prev, categoryId: '' }));
+  }, [editFormData.isIncome]);
+
   // Get categories filtered by transaction type
   const getFilteredCategories = () => {
     let filteredCategories;
@@ -278,6 +288,20 @@ const Transactions = () => {
 
     // Sort categories alphabetically by name
     return filteredCategories.sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  // Get categories for form dialogs based on income/expense selection
+  const getCategoriesForForm = (isIncome: boolean) => {
+    const categoryType = isIncome ? 'Income' : 'Expense';
+    
+    // Filter to only show child categories matching the transaction type
+    return categories
+      .filter(category => 
+        category.type === categoryType && 
+        category.parentCategoryId !== null && 
+        category.parentCategoryId !== undefined
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const clearFilters = () => {
@@ -1017,7 +1041,7 @@ const Transactions = () => {
                 <MenuItem value="">
                   <em>Uncategorized</em>
                 </MenuItem>
-                {categories.map((category) => (
+                {getCategoriesForForm(editFormData.isIncome).map((category) => (
                   <MenuItem key={category.categoryId} value={category.categoryId.toString()}>
                     {category.name}
                   </MenuItem>
@@ -1182,7 +1206,7 @@ const Transactions = () => {
                 <MenuItem value="">
                   <em>Uncategorized</em>
                 </MenuItem>
-                {getFilteredCategories().map((category) => (
+                {getCategoriesForForm(createFormData.isIncome).map((category) => (
                   <MenuItem key={category.categoryId} value={category.categoryId.toString()}>
                     {category.name}
                   </MenuItem>
