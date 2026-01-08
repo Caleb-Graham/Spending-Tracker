@@ -994,7 +994,7 @@ const Categories = () => {
                 />
               }
               label="Show Archived"
-              sx={{ mr: 2 }}
+              sx={{ mr: 2, '& .MuiTypography-root': { fontSize: '0.875rem' } }}
             />
 
             <Button
