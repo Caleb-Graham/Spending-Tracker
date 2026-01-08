@@ -22,7 +22,6 @@ import {
   Select,
   MenuItem,
   TextField,
-  Chip,
   Typography,
   TableSortLabel,
   Alert,
@@ -34,10 +33,12 @@ import {
   Switch,
   Avatar,
   Tooltip,
-  useTheme
+  useTheme,
+  LinearProgress,
+  Popover,
+  Badge
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon, ExpandMore as ExpandMoreIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon, ExpandMore as ExpandMoreIcon, ChevronRight as ChevronRightIcon, KeyboardArrowLeft as ArrowLeftIcon, KeyboardArrowRight as ArrowRightIcon, FilterList as FilterListIcon, Search as SearchIcon, Close as CloseIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import './Transactions.css';
@@ -61,8 +62,54 @@ const Transactions = () => {
   const [typeFilter, setTypeFilter] = useState<string>('all'); // 'all', 'income', 'expense'
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  
+  // Initialize view period from localStorage with 1 hour expiry
+  const [viewPeriod, setViewPeriodState] = useState<'month' | 'year' | 'week' | 'all'>(() => {
+    try {
+      const stored = localStorage.getItem('transactionsViewPeriod');
+      if (stored) {
+        const { value, timestamp } = JSON.parse(stored);
+        const oneHour = 60 * 60 * 1000;
+        if (Date.now() - timestamp < oneHour) {
+          return value as 'month' | 'year' | 'week' | 'all';
+        }
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+    return 'month';
+  });
+  
+  const [selectedDate, setSelectedDateState] = useState<Date>(() => {
+    try {
+      const stored = localStorage.getItem('transactionsSelectedDate');
+      if (stored) {
+        const { value, timestamp } = JSON.parse(stored);
+        const oneHour = 60 * 60 * 1000;
+        if (Date.now() - timestamp < oneHour) {
+          return new Date(value);
+        }
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+    return new Date();
+  });
+  
+  // Wrapper functions to save to localStorage
+  const setViewPeriod = (value: 'month' | 'year' | 'week' | 'all') => {
+    setViewPeriodState(value);
+    localStorage.setItem('transactionsViewPeriod', JSON.stringify({ value, timestamp: Date.now() }));
+  };
+  
+  const setSelectedDate = (value: Date | ((prev: Date) => Date)) => {
+    setSelectedDateState(prev => {
+      const newValue = typeof value === 'function' ? value(prev) : value;
+      localStorage.setItem('transactionsSelectedDate', JSON.stringify({ value: newValue.toISOString(), timestamp: Date.now() }));
+      return newValue;
+    });
+  };
+  
   const [showFutureOnly, setShowFutureOnly] = useState<boolean>(false);
 
   // Sorting states
@@ -107,6 +154,9 @@ const Transactions = () => {
   // Expanded parent categories in dropdowns
   const [expandedParentsCreate, setExpandedParentsCreate] = useState<Set<string>>(new Set());
   const [expandedParentsEdit, setExpandedParentsEdit] = useState<Set<string>>(new Set());
+
+  // UI state for filter popover
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
 
   const loadTransactions = async () => {
     if (!isAuthenticated) {
@@ -160,6 +210,76 @@ const Transactions = () => {
     setPage(0);
   };
 
+  // Helper functions for period calculations\n  // Returns date strings in YYYY-MM-DD format to avoid timezone issues
+  const getPeriodBoundaries = (date: Date, period: 'month' | 'year' | 'week' | 'all') => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    if (period === 'month') {
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      return {
+        startStr: `${year}-${String(month + 1).padStart(2, '0')}-01`,
+        endStr: `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      };
+    } else if (period === 'year') {
+      return {
+        startStr: `${year}-01-01`,
+        endStr: `${year}-12-31`
+      };
+    } else if (period === 'week') {
+      const start = new Date(date);
+      const day = start.getDay();
+      start.setDate(start.getDate() - day); // Start of week (Sunday)
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6); // End of week (Saturday)
+      return {
+        startStr: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
+        endStr: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
+      };
+    } else {
+      // 'all' - return null boundaries
+      return { startStr: null, endStr: null };
+    }
+  };
+
+  const navigatePeriod = (direction: 'prev' | 'next') => {
+    setSelectedDate(prev => {
+      const newDate = new Date(prev);
+      if (viewPeriod === 'month') {
+        newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+      } else if (viewPeriod === 'year') {
+        newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1));
+      } else if (viewPeriod === 'week') {
+        newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+      }
+      return newDate;
+    });
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  const getPeriodLabel = () => {
+    if (viewPeriod === 'month') {
+      return selectedDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    } else if (viewPeriod === 'year') {
+      return selectedDate.getFullYear().toString();
+    } else if (viewPeriod === 'week') {
+      const { startStr, endStr } = getPeriodBoundaries(selectedDate, 'week');
+      if (startStr && endStr) {
+        const start = new Date(startStr + 'T00:00:00');
+        const end = new Date(endStr + 'T00:00:00');
+        return `${start.toLocaleDateString('default', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+      }
+    }
+    return 'All Time';
+  };
+
+  const { startStr: periodStartStr, endStr: periodEndStr } = getPeriodBoundaries(selectedDate, viewPeriod);
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
   // Filter transactions based on current filter settings
   const filteredTransactions = transactions.filter(transaction => {
     // Type filter
@@ -169,21 +289,23 @@ const Transactions = () => {
     // Category filter
     if (categoryFilter !== 'all' && transaction.category?.categoryId !== parseInt(categoryFilter)) return false;
 
-    // Search term filter (searches in note/description)
-    if (searchTerm && !transaction.note.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    // Search term filter (searches in note/description AND category name)
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const noteMatch = transaction.note.toLowerCase().includes(searchLower);
+      const categoryMatch = transaction.category?.name?.toLowerCase().includes(searchLower) || false;
+      const amountMatch = Math.abs(transaction.amount).toFixed(2).includes(searchTerm);
+      if (!noteMatch && !categoryMatch && !amountMatch) return false;
+    }
 
-    // Date range filter
-    const transactionDate = new Date(transaction.date);
-    if (startDate && transactionDate < startDate) return false;
-    if (endDate && transactionDate > endDate) return false;
+    // Period filter using date strings for consistent comparison
+    const txDateStr = transaction.date.split('T')[0];
+    if (periodStartStr && txDateStr < periodStartStr) return false;
+    if (periodEndStr && txDateStr > periodEndStr) return false;
 
     // Exclude future transactions by default (unless toggle is enabled)
     if (!showFutureOnly) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const txDate = new Date(transaction.date);
-      txDate.setHours(0, 0, 0, 0);
-      if (txDate > today) return false;
+      if (txDateStr > todayStr) return false;
     }
 
     return true;
@@ -249,7 +371,7 @@ const Transactions = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [typeFilter, categoryFilter, searchTerm, startDate, endDate, showFutureOnly]);
+  }, [typeFilter, categoryFilter, searchTerm, viewPeriod, selectedDate, showFutureOnly]);
 
   // Reset category filter when type filter changes (since available categories change)
   useEffect(() => {
@@ -343,8 +465,8 @@ const Transactions = () => {
     setTypeFilter('all');
     setCategoryFilter('all');
     setSearchTerm('');
-    setStartDate(null);
-    setEndDate(null);
+    setViewPeriod('month');
+    setSelectedDate(new Date());
     setShowFutureOnly(false);
   };
 
@@ -353,7 +475,6 @@ const Transactions = () => {
     if (typeFilter !== 'all') count++;
     if (categoryFilter !== 'all') count++;
     if (searchTerm) count++;
-    if (startDate || endDate) count++;
     if (showFutureOnly) count++;
     return count;
   };
@@ -735,122 +856,229 @@ const Transactions = () => {
           </Alert>
         )}
 
-        <div className="transactions-header">
-          <Typography variant="h4" component="h1" gutterBottom>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+          <Typography variant="h4" component="h1">
             Transactions
           </Typography>
-          <div>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Search Field */}
+            <TextField
+              size="small"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ width: 200 }}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 20 }} />,
+                endAdornment: searchTerm && (
+                  <IconButton size="small" onClick={() => setSearchTerm('')}>
+                    <CloseIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                )
+              }}
+            />
+            {/* Filter Button */}
+            <IconButton
+              onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+              sx={{ 
+                border: 1, 
+                borderColor: getActiveFilterCount() > 0 ? 'primary.main' : 'divider',
+                borderRadius: 1,
+                p: 1
+              }}
+            >
+              <Badge 
+                badgeContent={getActiveFilterCount()} 
+                color="primary"
+                sx={{ '& .MuiBadge-badge': { fontSize: '0.65rem', height: 16, minWidth: 16 } }}
+              >
+                <FilterListIcon sx={{ fontSize: 20 }} />
+              </Badge>
+            </IconButton>
+            <Popover
+              open={Boolean(filterAnchorEl)}
+              anchorEl={filterAnchorEl}
+              onClose={() => setFilterAnchorEl(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 200 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Filters</Typography>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Type</InputLabel>
+                  <Select
+                    value={typeFilter}
+                    label="Type"
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                  >
+                    <MenuItem value="all">All Types</MenuItem>
+                    <MenuItem value="income">Income Only</MenuItem>
+                    <MenuItem value="expense">Expense Only</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Category</InputLabel>
+                  <Select
+                    value={categoryFilter}
+                    label="Category"
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                  >
+                    <MenuItem value="all">All Categories</MenuItem>
+                    {getFilteredCategories().map((category) => (
+                      <MenuItem key={category.categoryId} value={category.categoryId.toString()}>
+                        {category.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Button
+                  variant="outlined"
+                  onClick={() => { clearFilters(); setFilterAnchorEl(null); }}
+                  disabled={getActiveFilterCount() === 0}
+                  size="small"
+                  fullWidth
+                >
+                  Clear Filters
+                </Button>
+              </Box>
+            </Popover>
             <Button
               variant="contained"
               onClick={() => handleCreateOpen()}
             >
               + New Transaction
             </Button>
-          </div>
-        </div>
-
-        {/* Filters Section */}
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Filters {getActiveFilterCount() > 0 && (
-              <Chip 
-                label={`${getActiveFilterCount()} active`} 
-                size="small" 
-                color="primary" 
-                sx={{ ml: 1 }}
-              />
-            )}
-          </Typography>
-          
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-            {/* Transaction Type Filter */}
-            <Box sx={{ minWidth: 150 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Type</InputLabel>
-                <Select
-                  value={typeFilter}
-                  label="Type"
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                >
-                  <MenuItem value="all">All Types</MenuItem>
-                  <MenuItem value="income">Income Only</MenuItem>
-                  <MenuItem value="expense">Expense Only</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-
-            {/* Category Filter */}
-            <Box sx={{ minWidth: 200 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Category</InputLabel>
-                <Select
-                  value={categoryFilter}
-                  label="Category"
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                >
-                  <MenuItem value="all">
-                    All Categories
-                    {typeFilter !== 'all' && (
-                      <span style={{ fontSize: '0.75em', opacity: 0.7, marginLeft: '4px' }}>
-                        ({typeFilter})
-                      </span>
-                    )}
-                  </MenuItem>
-                  {getFilteredCategories().map((category) => (
-                    <MenuItem key={category.categoryId} value={category.categoryId.toString()}>
-                      {category.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-
-            {/* Search Filter */}
-            <Box sx={{ minWidth: 180 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Search Description"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Enter keywords..."
-              />
-            </Box>
-
-            {/* Start Date Filter */}
-            <Box sx={{ minWidth: 150 }}>
-              <DatePicker
-                label="Start Date"
-                value={startDate}
-                onChange={(newValue) => setStartDate(newValue)}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-              />
-            </Box>
-
-            {/* End Date Filter */}
-            <Box sx={{ minWidth: 150 }}>
-              <DatePicker
-                label="End Date"
-                value={endDate}
-                onChange={(newValue) => setEndDate(newValue)}
-                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                minDate={startDate || undefined}
-              />
-            </Box>
-
-            {/* Clear Filters Button */}
-            <Box>
-              <Button
-                variant="outlined"
-                onClick={clearFilters}
-                disabled={getActiveFilterCount() === 0}
-                size="small"
-              >
-                Clear
-              </Button>
-            </Box>
           </Box>
-        </Paper>
+        </Box>
+
+        {/* Period Summary with Navigation */}
+        {(() => {
+          // Get transactions for selected period using date string comparison
+          // This avoids timezone issues with Date objects
+          const periodTransactions = transactions.filter(t => {
+            const txDateStr = t.date.split('T')[0]; // Get just the date part
+            if (periodStartStr && txDateStr < periodStartStr) return false;
+            if (periodEndStr && txDateStr > periodEndStr) return false;
+            // Only filter by 'now' if we're looking at current or future period
+            if (periodEndStr && periodEndStr > todayStr && txDateStr > todayStr) return false;
+            return true;
+          });
+          
+          const periodIncome = periodTransactions
+            .filter(t => t.isIncome)
+            .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+          
+          const periodExpenses = periodTransactions
+            .filter(t => !t.isIncome)
+            .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+          
+          const netAmount = periodIncome - periodExpenses;
+          const spendingPercentage = periodIncome > 0 ? (periodExpenses / periodIncome) * 100 : 0;
+          
+          return (
+            <Paper sx={{ p: 2, mb: 3 }}>
+              {/* Period Navigation */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {viewPeriod !== 'all' && (
+                    <>
+                      <IconButton size="small" onClick={() => navigatePeriod('prev')}>
+                        <ArrowLeftIcon />
+                      </IconButton>
+                      <Typography 
+                        variant="h6" 
+                        sx={{ minWidth: 180, textAlign: 'center', fontWeight: 'bold', cursor: 'pointer' }}
+                        onClick={goToToday}
+                      >
+                        {getPeriodLabel()}
+                      </Typography>
+                      <IconButton size="small" onClick={() => navigatePeriod('next')}>
+                        <ArrowRightIcon />
+                      </IconButton>
+                    </>
+                  )}
+                  <FormControl size="small" sx={{ minWidth: 90, ml: 1 }}>
+                    <Select
+                      value={viewPeriod}
+                      onChange={(e) => setViewPeriod(e.target.value as 'month' | 'year' | 'week' | 'all')}
+                      sx={{ '& .MuiSelect-select': { py: 0.5, fontSize: '0.875rem' } }}
+                    >
+                      <MenuItem value="week">Week</MenuItem>
+                      <MenuItem value="month">Month</MenuItem>
+                      <MenuItem value="year">Year</MenuItem>
+                      <MenuItem value="all">All Time</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ display: 'flex', gap: 3 }}>
+                    <Typography variant="body2">
+                      Income: <span style={{ color: theme.palette.custom?.incomeText || '#4caf50', fontWeight: 'bold' }}>
+                        ${periodIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </Typography>
+                    <Typography variant="body2">
+                      Expenses: <span style={{ color: theme.palette.custom?.expenseText || '#f44336', fontWeight: 'bold' }}>
+                        ${periodExpenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </Typography>
+                    <Typography variant="body2">
+                      Net: <span style={{ 
+                        color: netAmount >= 0 
+                          ? (theme.palette.custom?.incomeText || '#4caf50') 
+                          : (theme.palette.custom?.expenseText || '#f44336'), 
+                        fontWeight: 'bold' 
+                      }}>
+                        {netAmount >= 0 ? '+' : '-'}${Math.abs(netAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+              
+              {/* Progress Bar */}
+              {viewPeriod !== 'all' && (
+                <>
+                  <Box sx={{ position: 'relative' }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(spendingPercentage, 100)}
+                      sx={{
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: theme.palette.action.disabledBackground,
+                        '& .MuiLinearProgress-bar': {
+                          borderRadius: 4,
+                          backgroundColor: spendingPercentage > 100 
+                            ? theme.palette.error.main 
+                            : spendingPercentage > 90 
+                              ? theme.palette.warning.main 
+                              : theme.palette.success.main
+                        }
+                      }}
+                    />
+                    {spendingPercentage > 100 && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: '100%',
+                          transform: 'translateX(-100%)',
+                          width: `${Math.min(spendingPercentage - 100, 100)}%`,
+                          height: 8,
+                          borderRadius: '0 4px 4px 0',
+                          backgroundColor: theme.palette.error.main,
+                          opacity: 0.5
+                        }}
+                      />
+                    )}
+                  </Box>
+                </>
+              )}
+            </Paper>
+          );
+        })()}
 
         <TableContainer component={Paper} className="transactions-table">
           <Table>
