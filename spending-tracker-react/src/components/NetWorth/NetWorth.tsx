@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../utils/auth';
 import {
   Typography,
@@ -21,9 +21,15 @@ import {
   DialogActions,
   TextField,
   useTheme,
-  TablePagination
+  TablePagination,
+  IconButton,
+  Popover,
+  FormControlLabel,
+  Checkbox,
+  Badge,
+  Divider
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon, FilterList as FilterListIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { getLocalToday, formatDate } from '../../utils/dateUtils';
 import { 
@@ -32,11 +38,13 @@ import {
   createNetWorthSnapshotNeon,
   deleteNetWorthSnapshotNeon,
   getNetWorthSnapshotsWithValuesNeon,
+  getNetWorthSnapshotsWithAccountValuesNeon,
   getAllNetWorthAccountTemplatesNeon,
   type NetWorthSnapshot, 
   type NetWorthCategorySummary,
   type CreateNetWorthSnapshotRequest,
-  type CreateNetWorthAssetRequest
+  type CreateNetWorthAssetRequest,
+  type SnapshotAccountValue
 } from '../../services';
 import { useDateRange } from '../../hooks/useDateRange';
 import { getUserAccountId } from '../../utils/accountUtils';
@@ -56,6 +64,12 @@ const NetWorth: React.FC = () => {
   const [accountTemplates, setAccountTemplates] = useState<(CreateNetWorthAssetRequest & { isArchived?: boolean })[]>([]);
   
   const [settingsManagerOpen, setSettingsManagerOpen] = useState(false);
+  
+  // Filter state for chart
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const [selectedAccounts, setSelectedAccounts] = useState<Set<number>>(new Set());
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [accountValues, setAccountValues] = useState<SnapshotAccountValue[]>([]);
   
   // Pagination state for historical snapshots
   const [page, setPage] = useState(0);
@@ -122,9 +136,13 @@ const NetWorth: React.FC = () => {
       const endDateStr = endDate ? endDate.toISOString().split('T')[0] : undefined;
       
       // OPTIMIZED: Get all snapshots with net worth values in 2 API calls instead of 95+
-      const data = await getNetWorthSnapshotsWithValuesNeon(accessToken, startDateStr, endDateStr);
+      const [data, accountData] = await Promise.all([
+        getNetWorthSnapshotsWithValuesNeon(accessToken, startDateStr, endDateStr),
+        getNetWorthSnapshotsWithAccountValuesNeon(accessToken, startDateStr, endDateStr)
+      ]);
       
       setSnapshots(data);
+      setAccountValues(accountData);
       
       // Load account templates
       if (accountTemplates.length === 0) {
@@ -483,19 +501,194 @@ const NetWorth: React.FC = () => {
     loadNetWorthSnapshots(dateRangeState.startDate || undefined, dateRangeState.endDate || undefined);
   }, [dateRangeState.startDate, dateRangeState.endDate]);
 
-  // Transform data for chart with calculated changes
+  // Get unique accounts and categories for the filter
+  const { uniqueAccounts, uniqueCategories } = useMemo(() => {
+    const accountMap = new Map<number, { id: number; name: string; category: string }>();
+    const categorySet = new Set<string>();
+    
+    accountValues.forEach(av => {
+      if (!accountMap.has(av.accountId)) {
+        accountMap.set(av.accountId, { id: av.accountId, name: av.accountName, category: av.category });
+      }
+      categorySet.add(av.category);
+    });
+    
+    // Sort accounts by category then name
+    const accounts = Array.from(accountMap.values()).sort((a, b) => {
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return a.name.localeCompare(b.name);
+    });
+    
+    return {
+      uniqueAccounts: accounts,
+      uniqueCategories: Array.from(categorySet).sort()
+    };
+  }, [accountValues]);
+
+  // Check if any filters are active
+  const hasActiveFilter = selectedAccounts.size > 0 || selectedCategories.size > 0;
+  
+  // Get the active filter label for chart legend
+  const getFilterLabel = () => {
+    const labels: string[] = [];
+    
+    // Add category names
+    selectedCategories.forEach(cat => labels.push(cat));
+    
+    // Add account names
+    selectedAccounts.forEach(accId => {
+      const account = uniqueAccounts.find(a => a.id === accId);
+      if (account) labels.push(account.name);
+    });
+    
+    if (labels.length === 1) return labels[0];
+    if (labels.length > 1) return labels.join(', ');
+    return 'Net Worth';
+  };
+
+  // Get all selected filter items for displaying as chips
+  const getSelectedFilterItems = () => {
+    const items: { type: 'category' | 'account'; id: string | number; name: string }[] = [];
+    
+    selectedCategories.forEach(cat => {
+      items.push({ type: 'category', id: cat, name: cat });
+    });
+    
+    selectedAccounts.forEach(accId => {
+      const account = uniqueAccounts.find(a => a.id === accId);
+      if (account) {
+        items.push({ type: 'account', id: accId, name: account.name });
+      }
+    });
+    
+    return items;
+  };
+
+  // Remove a specific filter
+  const removeFilter = (type: 'category' | 'account', id: string | number) => {
+    if (type === 'category') {
+      setSelectedCategories(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id as string);
+        return newSet;
+      });
+    } else {
+      setSelectedAccounts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id as number);
+        return newSet;
+      });
+    }
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSelectedAccounts(new Set());
+    setSelectedCategories(new Set());
+  };
+
+  // Toggle account selection
+  const toggleAccount = (accountId: number) => {
+    setSelectedAccounts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(accountId)) {
+        newSet.delete(accountId);
+      } else {
+        newSet.add(accountId);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle category selection
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  };
+
+  // Transform data for chart with calculated changes - with filtering
   const snapshotsWithChanges = calculateChanges(snapshots);
-  const chartData = snapshotsWithChanges.map(snapshot => ({
-    date: formatDate(snapshot.date, 'MMM yyyy'),
-    fullDate: snapshot.date,
-    netWorth: snapshot.netWorth || 0,
-    formattedNetWorth: `$${(snapshot.netWorth || 0).toLocaleString('en-US', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
-    })}`,
-    percentageChange: snapshot.percentageChange,
-    dollarChange: snapshot.dollarChange
-  }));
+  
+  // Compute filtered chart data
+  const chartData = useMemo(() => {
+    if (!hasActiveFilter) {
+      // No filter - use regular net worth
+      return snapshotsWithChanges.map(snapshot => ({
+        date: formatDate(snapshot.date, 'MMM yyyy'),
+        fullDate: snapshot.date,
+        netWorth: snapshot.netWorth || 0,
+        formattedNetWorth: `$${(snapshot.netWorth || 0).toLocaleString('en-US', { 
+          minimumFractionDigits: 2, 
+          maximumFractionDigits: 2 
+        })}`,
+        percentageChange: snapshot.percentageChange,
+        dollarChange: snapshot.dollarChange
+      }));
+    }
+    
+    // Filter is active - compute filtered values per snapshot
+    const snapshotValueMap = new Map<number, number>();
+    
+    accountValues.forEach(av => {
+      // Check if this account passes the filter
+      const accountSelected = selectedAccounts.size === 0 || selectedAccounts.has(av.accountId);
+      const categorySelected = selectedCategories.size === 0 || selectedCategories.has(av.category);
+      
+      if (accountSelected && categorySelected) {
+        snapshotValueMap.set(
+          av.snapshotId,
+          (snapshotValueMap.get(av.snapshotId) || 0) + av.value
+        );
+      }
+    });
+    
+    // Build the full data first
+    const fullData = snapshotsWithChanges.map((snapshot, index) => {
+      const filteredValue = snapshotValueMap.get(snapshot.snapshotId) || 0;
+      
+      // Calculate change from previous snapshot
+      let percentageChange: number | undefined;
+      let dollarChange: number | undefined;
+      
+      if (index > 0) {
+        const prevSnapshot = snapshotsWithChanges[index - 1];
+        const prevValue = snapshotValueMap.get(prevSnapshot.snapshotId) || 0;
+        if (prevValue !== 0) {
+          dollarChange = filteredValue - prevValue;
+          percentageChange = (dollarChange / Math.abs(prevValue)) * 100;
+        }
+      }
+      
+      return {
+        date: formatDate(snapshot.date, 'MMM yyyy'),
+        fullDate: snapshot.date,
+        netWorth: filteredValue,
+        formattedNetWorth: `$${filteredValue.toLocaleString('en-US', { 
+          minimumFractionDigits: 2, 
+          maximumFractionDigits: 2 
+        })}`,
+        percentageChange,
+        dollarChange
+      };
+    });
+    
+    // Find the first non-zero index and include one month before
+    const firstNonZeroIndex = fullData.findIndex(d => d.netWorth !== 0);
+    
+    if (firstNonZeroIndex > 1) {
+      // Start from one month before the first non-zero value
+      return fullData.slice(firstNonZeroIndex - 1);
+    }
+    
+    return fullData;
+  }, [snapshotsWithChanges, accountValues, selectedAccounts, selectedCategories, hasActiveFilter]);
 
   const formatCurrency = (value: number) => {
     return `$${Math.abs(value).toLocaleString('en-US', { 
@@ -576,9 +769,110 @@ const NetWorth: React.FC = () => {
       {/* Chart Section */}
       <Box style={{ marginTop: '24px' }}>
         <Paper style={{ padding: '20px' }}>
-          <Typography variant="h6" gutterBottom>
-            Net Worth Over Time
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography variant="h6">
+                Net Worth Over Time
+              </Typography>
+              {getSelectedFilterItems().map(item => (
+                <Chip
+                  key={`${item.type}-${item.id}`}
+                  label={item.name}
+                  size="small"
+                  onDelete={() => removeFilter(item.type, item.id)}
+                  color="primary"
+                />
+              ))}
+            </Box>
+            <IconButton
+              onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+              size="small"
+              sx={{ 
+                border: 1, 
+                borderColor: hasActiveFilter ? 'primary.main' : 'divider',
+                borderRadius: 1
+              }}
+            >
+              <Badge 
+                badgeContent={selectedAccounts.size + selectedCategories.size} 
+                color="primary"
+                sx={{ '& .MuiBadge-badge': { fontSize: '0.65rem', height: 16, minWidth: 16 } }}
+              >
+                <FilterListIcon sx={{ fontSize: 20 }} />
+              </Badge>
+            </IconButton>
+          </Box>
+          
+          {/* Filter Popover */}
+          <Popover
+            open={Boolean(filterAnchorEl)}
+            anchorEl={filterAnchorEl}
+            onClose={() => setFilterAnchorEl(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <Box sx={{ p: 2, minWidth: 280, maxHeight: 400, overflow: 'auto' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Filter Chart</Typography>
+                {hasActiveFilter && (
+                  <Button size="small" onClick={clearFilters}>Clear All</Button>
+                )}
+              </Box>
+              
+              {/* Categories */}
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, mb: 0.5, display: 'block' }}>
+                By Category
+              </Typography>
+              {uniqueCategories.map(category => (
+                <FormControlLabel
+                  key={category}
+                  control={
+                    <Checkbox
+                      checked={selectedCategories.has(category)}
+                      onChange={() => toggleCategory(category)}
+                      size="small"
+                    />
+                  }
+                  label={<Typography variant="body2">{category}</Typography>}
+                  sx={{ display: 'flex', ml: 0, mr: 0 }}
+                />
+              ))}
+              
+              <Divider sx={{ my: 1.5 }} />
+              
+              {/* Accounts */}
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                By Account
+              </Typography>
+              {uniqueCategories.map(category => {
+                const accountsInCategory = uniqueAccounts.filter(a => a.category === category);
+                if (accountsInCategory.length === 0) return null;
+                
+                return (
+                  <Box key={category} sx={{ mb: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 500, color: 'text.secondary', pl: 0.5 }}>
+                      {category}
+                    </Typography>
+                    {accountsInCategory.map(account => (
+                      <FormControlLabel
+                        key={account.id}
+                        control={
+                          <Checkbox
+                            checked={selectedAccounts.has(account.id)}
+                            onChange={() => toggleAccount(account.id)}
+                            size="small"
+                          />
+                        }
+                        label={<Typography variant="body2">{account.name}</Typography>}
+                        sx={{ display: 'flex', ml: 1, mr: 0 }}
+                      />
+                    ))}
+                  </Box>
+                );
+              })}
+            </Box>
+          </Popover>
+          
           {isLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
               <CircularProgress />
@@ -618,7 +912,7 @@ const NetWorth: React.FC = () => {
                   strokeWidth={3}
                   dot={{ fill: '#2196F3', strokeWidth: 2, r: 4 }}
                   activeDot={{ r: 6 }}
-                  name="Net Worth"
+                  name={hasActiveFilter ? getFilterLabel() : "Net Worth"}
                 />
               </LineChart>
             </ResponsiveContainer>

@@ -408,6 +408,107 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
   }));
 };
 
+// Interface for account-level time series data
+export interface SnapshotAccountValue {
+  snapshotId: number;
+  date: string;
+  accountId: number;
+  accountName: string;
+  category: string;
+  value: number;
+  isAsset: boolean;
+}
+
+// Get snapshots with per-account values for filtering/charting
+export const getNetWorthSnapshotsWithAccountValuesNeon = async (
+  accessToken: string,
+  startDate?: string,
+  endDate?: string
+): Promise<SnapshotAccountValue[]> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  // Build snapshot query
+  let snapshotQuery = pg.from("NetWorthSnapshots").select("SnapshotId, Date");
+
+  if (startDate) {
+    snapshotQuery = snapshotQuery.gte("Date", startDate);
+  }
+  if (endDate) {
+    snapshotQuery = snapshotQuery.lte("Date", endDate);
+  }
+
+  const { data: snapshots, error: snapshotError } = await snapshotQuery.order(
+    "Date",
+    { ascending: true }
+  );
+
+  if (snapshotError) {
+    throw new Error(
+      snapshotError.message || "Failed to fetch net worth snapshots"
+    );
+  }
+
+  if (!snapshots || snapshots.length === 0) {
+    return [];
+  }
+
+  // Get all net worth entries for these snapshots
+  const snapshotIds = snapshots.map((s: any) => s.SnapshotId);
+  const { data: netWorthData, error: netWorthError } = await pg
+    .from("NetWorth")
+    .select("SnapshotId, Value, NetWorthAccountId")
+    .in("SnapshotId", snapshotIds);
+
+  if (netWorthError) {
+    throw new Error(netWorthError.message || "Failed to fetch net worth data");
+  }
+
+  // Get all accounts with their category info
+  const { data: accountsData, error: accountsError } = await pg
+    .from("NetWorthAccounts")
+    .select("NetWorthAccountId, Name, IsAsset, NetWorthCategories(Name)");
+
+  if (accountsError) {
+    throw new Error(accountsError.message || "Failed to fetch accounts");
+  }
+
+  // Create maps for efficient lookups
+  const snapshotDateMap = new Map<number, string>();
+  snapshots.forEach((s: any) => {
+    snapshotDateMap.set(s.SnapshotId, s.Date);
+  });
+
+  const accountInfoMap = new Map<
+    number,
+    { name: string; category: string; isAsset: boolean }
+  >();
+  (accountsData || []).forEach((account: any) => {
+    accountInfoMap.set(account.NetWorthAccountId, {
+      name: account.Name,
+      category: account.NetWorthCategories?.Name || "Uncategorized",
+      isAsset: account.IsAsset,
+    });
+  });
+
+  // Build the result array
+  return (netWorthData || []).map((row: any) => {
+    const accountInfo = accountInfoMap.get(row.NetWorthAccountId) || {
+      name: "Unknown",
+      category: "Uncategorized",
+      isAsset: true,
+    };
+    return {
+      snapshotId: row.SnapshotId,
+      date: snapshotDateMap.get(row.SnapshotId) || "",
+      accountId: row.NetWorthAccountId,
+      accountName: accountInfo.name,
+      category: accountInfo.category,
+      value: parseFloat(row.Value),
+      isAsset: accountInfo.isAsset,
+    };
+  });
+};
+
 // OPTIMIZED: Get all unique accounts from all snapshots in one query
 export const getAllNetWorthAccountTemplatesNeon = async (
   accessToken: string
