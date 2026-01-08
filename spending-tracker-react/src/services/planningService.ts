@@ -23,7 +23,6 @@ export interface PlanningBudget {
   planningBudgetId: number;
   categoryId: number;
   scenarioId: number;
-  year: number;
   plannedAmount: number;
   createdAt: string;
   updatedAt: string;
@@ -42,21 +41,18 @@ export interface PlanningBudget {
 export interface SavePlanningBudgetRequest {
   categoryId: number;
   scenarioId: number;
-  year: number;
   plannedAmount: number;
 }
 
 // Neon Data API versions of planning functions
 export const getPlanningBudgetsNeon = async (
   accessToken: string,
-  scenarioId: number,
-  year: number
+  scenarioId: number
 ): Promise<
   Array<{
     planningBudgetId: number;
     categoryId: number;
     scenarioId: number;
-    year: number;
     plannedAmount: number;
     createdAt: string;
     updatedAt: string;
@@ -64,14 +60,13 @@ export const getPlanningBudgetsNeon = async (
 > => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
-  // Get planning budgets for the scenario and year
+  // Get planning budgets for the scenario
   const { data: budgets, error: budgetsError } = await pg
     .from("PlanningBudgets")
     .select(
-      "PlanningBudgetId, CategoryId, ScenarioId, Year, PlannedAmount, CreatedAt, UpdatedAt"
+      "PlanningBudgetId, CategoryId, ScenarioId, PlannedAmount, CreatedAt, UpdatedAt"
     )
-    .eq("ScenarioId", scenarioId)
-    .eq("Year", year);
+    .eq("ScenarioId", scenarioId);
 
   if (budgetsError) {
     throw new Error(budgetsError.message || "Failed to fetch planning budgets");
@@ -86,7 +81,6 @@ export const getPlanningBudgetsNeon = async (
     planningBudgetId: budget.PlanningBudgetId,
     categoryId: budget.CategoryId,
     scenarioId: budget.ScenarioId,
-    year: budget.Year,
     plannedAmount: budget.PlannedAmount,
     createdAt: budget.CreatedAt,
     updatedAt: budget.UpdatedAt,
@@ -106,7 +100,6 @@ export const savePlanningBudgetNeon = async (
     .select("PlanningBudgetId")
     .eq("CategoryId", request.categoryId)
     .eq("ScenarioId", request.scenarioId)
-    .eq("Year", request.year)
     .single();
 
   let result;
@@ -120,7 +113,6 @@ export const savePlanningBudgetNeon = async (
       })
       .eq("CategoryId", request.categoryId)
       .eq("ScenarioId", request.scenarioId)
-      .eq("Year", request.year)
       .select()
       .single();
 
@@ -136,7 +128,6 @@ export const savePlanningBudgetNeon = async (
         UserId: userId,
         CategoryId: request.categoryId,
         ScenarioId: request.scenarioId,
-        Year: request.year,
         PlannedAmount: request.plannedAmount,
         CreatedAt: new Date().toISOString(),
         UpdatedAt: new Date().toISOString(),
@@ -167,7 +158,6 @@ export const savePlanningBudgetNeon = async (
     planningBudgetId: result.PlanningBudgetId,
     categoryId: result.CategoryId,
     scenarioId: result.ScenarioId,
-    year: result.Year,
     plannedAmount: result.PlannedAmount,
     createdAt: result.CreatedAt,
     updatedAt: result.UpdatedAt,
@@ -187,8 +177,7 @@ export const savePlanningBudgetNeon = async (
 export const deletePlanningBudgetNeon = async (
   accessToken: string,
   categoryId: number,
-  scenarioId: number,
-  year: number
+  scenarioId: number
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -196,8 +185,7 @@ export const deletePlanningBudgetNeon = async (
     .from("PlanningBudgets")
     .delete()
     .eq("CategoryId", categoryId)
-    .eq("ScenarioId", scenarioId)
-    .eq("Year", year);
+    .eq("ScenarioId", scenarioId);
 
   if (error) {
     throw new Error(error.message || "Failed to delete planning budget");

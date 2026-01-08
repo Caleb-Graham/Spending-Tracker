@@ -72,8 +72,8 @@ const Planning = () => {
   // Scenario state
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
-  const [showScenarioManager, setShowScenarioManager] = useState(false);
-
+  const [showScenarioManager, setShowScenarioManager] = useState(false);  
+  
   const currentYear = new Date().getFullYear();
 
   // Helper function to get display amount based on current view mode
@@ -236,7 +236,7 @@ const Planning = () => {
     
     try {
       const accessToken = await getAccessToken();
-      const planningBudgets = await getPlanningBudgetsNeon(accessToken!, currentScenario.scenarioId, currentYear);
+      const planningBudgets = await getPlanningBudgetsNeon(accessToken!, currentScenario.scenarioId);
       
       // Initialize planning data with saved values or empty values
       const initialData: PlanningData = {};
@@ -311,12 +311,11 @@ const Planning = () => {
             await savePlanningBudgetNeon(accessToken!, {
               categoryId: budget.categoryId,
               scenarioId: currentScenario.scenarioId,
-              year: currentYear,
               plannedAmount: yearlyAmount
             });
           } else {
             // Delete if amount is 0
-            await deletePlanningBudgetNeon(accessToken!, budget.categoryId, currentScenario.scenarioId, currentYear);
+            await deletePlanningBudgetNeon(accessToken!, budget.categoryId, currentScenario.scenarioId);
           }
         } catch (err) {
           console.error(`Error saving budget for category ${budget.categoryId}:`, err);
@@ -330,7 +329,7 @@ const Planning = () => {
       setError('Failed to save planning data');
       setSavingStates(new Set());
     }
-  }, [currentScenario, isAuthenticated, getAccessToken, currentYear, planningData, parentPlanningData]);
+  }, [currentScenario, isAuthenticated, getAccessToken, planningData, parentPlanningData]);
 
   const handleAmountChange = (categoryId: number, value: string) => {
     // Store the raw input value for display
@@ -538,7 +537,7 @@ const Planning = () => {
       
       await Promise.all(
         allCategoryIds.map(categoryId => 
-          deletePlanningBudgetNeon(accessToken!, categoryId, currentScenario.scenarioId, currentYear)
+          deletePlanningBudgetNeon(accessToken!, categoryId, currentScenario.scenarioId)
         )
       );
       
