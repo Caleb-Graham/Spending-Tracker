@@ -771,9 +771,9 @@ const NetWorth: React.FC = () => {
         <Paper style={{ padding: '20px' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <Typography variant="h6">
-                Net Worth Over Time
-              </Typography>
+              {/* <Typography variant="h6">
+                Net Worth
+              </Typography> */}
               {getSelectedFilterItems().map(item => (
                 <Chip
                   key={`${item.type}-${item.id}`}
@@ -901,7 +901,17 @@ const NetWorth: React.FC = () => {
                 />
                 <YAxis 
                   tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  tickFormatter={(value) => {
+                    // Find max value in chart data to determine formatting
+                    const maxValue = Math.max(...chartData.map(d => Math.abs(d.netWorth)));
+                    
+                    // If max value is under 10k, show full dollar amounts
+                    if (maxValue < 10000) {
+                      return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+                    }
+                    // Otherwise use k notation
+                    return `$${(value / 1000).toFixed(0)}k`;
+                  }}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
@@ -910,8 +920,20 @@ const NetWorth: React.FC = () => {
                   dataKey="netWorth" 
                   stroke="#2196F3" 
                   strokeWidth={3}
-                  dot={{ fill: '#2196F3', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={{ fill: '#2196F3', strokeWidth: 2, r: 4, cursor: 'pointer' }}
+                  activeDot={{ 
+                    r: 6, 
+                    cursor: 'pointer',
+                    onClick: (_e: any, payload: any) => {
+                      if (payload && payload.payload) {
+                        const clickedDate = payload.payload.fullDate;
+                        const snapshot = snapshotsWithChanges.find(s => s.date === clickedDate);
+                        if (snapshot) {
+                          handleSnapshotSelect(snapshot);
+                        }
+                      }
+                    }
+                  }}
                   name={hasActiveFilter ? getFilterLabel() : "Net Worth"}
                 />
               </LineChart>
