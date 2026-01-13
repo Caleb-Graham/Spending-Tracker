@@ -1499,23 +1499,26 @@ const Transactions = () => {
                       >
                         <MenuItem value="DAILY">Daily</MenuItem>
                         <MenuItem value="WEEKLY">Weekly</MenuItem>
+                        <MenuItem value="BIWEEKLY">Biweekly</MenuItem>
                         <MenuItem value="MONTHLY">Monthly</MenuItem>
                         <MenuItem value="YEARLY">Yearly</MenuItem>
                       </Select>
                     </FormControl>
                     
-                    <TextField
-                      label="Interval"
-                      type="number"
-                      value={editFormData.recurringInterval}
-                      onChange={(e) => setEditFormData({ 
-                        ...editFormData, 
-                        recurringInterval: parseInt(e.target.value) || 1 
-                      })}
-                      fullWidth
-                      slotProps={{ htmlInput: { min: 1 } }}
-                      helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
-                    />
+                    {editFormData.recurringFrequency !== 'BIWEEKLY' && (
+                      <TextField
+                        label="Interval"
+                        type="number"
+                        value={editFormData.recurringInterval}
+                        onChange={(e) => setEditFormData({ 
+                          ...editFormData, 
+                          recurringInterval: parseInt(e.target.value) || 1 
+                        })}
+                        fullWidth
+                        slotProps={{ htmlInput: { min: 1 } }}
+                        helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
+                      />
+                    )}
                   </>
                 )}
               </Box>
@@ -1590,13 +1593,6 @@ const Transactions = () => {
                   }
                 }
               }}
-            />
-            <TextField
-              label="Description"
-              value={createFormData.note}
-              onChange={(e) => setCreateFormData({ ...createFormData, note: e.target.value })}
-              fullWidth
-              placeholder="e.g., Coffee, Gas, Paycheck"
             />
             <TextField
               label="Amount"
@@ -1674,6 +1670,13 @@ const Transactions = () => {
                 })}
               </Select>
             </FormControl>
+            <TextField
+              label="Description"
+              value={createFormData.note}
+              onChange={(e) => setCreateFormData({ ...createFormData, note: e.target.value })}
+              fullWidth
+              placeholder="e.g., Coffee, Gas, Paycheck"
+            />
 
             {/* Recurring Transaction Section */}
             <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
@@ -1688,7 +1691,7 @@ const Transactions = () => {
                 sx={{ mb: createFormData.isRecurring ? 2 : 0 }}
               />
 
-              {createFormData.isRecurring && (
+                  {createFormData.isRecurring && (
                 <>
                   <FormControl fullWidth sx={{ mb: 2 }}>
                     <InputLabel>Frequency</InputLabel>
@@ -1699,20 +1702,23 @@ const Transactions = () => {
                     >
                       <MenuItem value="DAILY">Daily</MenuItem>
                       <MenuItem value="WEEKLY">Weekly</MenuItem>
+                      <MenuItem value="BIWEEKLY">Biweekly (Every 2 weeks)</MenuItem>
                       <MenuItem value="MONTHLY">Monthly</MenuItem>
                       <MenuItem value="YEARLY">Yearly</MenuItem>
                     </Select>
                   </FormControl>
 
-                  <TextField
-                    label="Interval"
-                    type="number"
-                    value={createFormData.recurringInterval}
-                    onChange={(e) => setCreateFormData({ ...createFormData, recurringInterval: Math.max(1, parseInt(e.target.value) || 1) })}
-                    fullWidth
-                    slotProps={{ htmlInput: { min: '1', max: '12' } }}
-                    helperText={`Every ${createFormData.recurringInterval} ${createFormData.recurringInterval === 1 ? createFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : createFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
-                  />
+                  {createFormData.recurringFrequency !== 'BIWEEKLY' && (
+                    <TextField
+                      label="Interval"
+                      type="number"
+                      value={createFormData.recurringInterval}
+                      onChange={(e) => setCreateFormData({ ...createFormData, recurringInterval: Math.max(1, parseInt(e.target.value) || 1) })}
+                      fullWidth
+                      slotProps={{ htmlInput: { min: '1', max: '12' } }}
+                      helperText={`Every ${createFormData.recurringInterval} ${createFormData.recurringInterval === 1 ? createFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : createFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
+                    />
+                  )}
                 </>
               )}
             </Box>

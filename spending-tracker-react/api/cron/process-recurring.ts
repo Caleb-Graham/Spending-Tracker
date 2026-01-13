@@ -136,6 +136,9 @@ function calculateNextRunAt(
     case "WEEKLY":
       date.setDate(date.getDate() + 7 * interval);
       break;
+    case "BIWEEKLY":
+      date.setDate(date.getDate() + 14 * interval);
+      break;
     case "MONTHLY":
       date.setMonth(date.getMonth() + interval);
       break;

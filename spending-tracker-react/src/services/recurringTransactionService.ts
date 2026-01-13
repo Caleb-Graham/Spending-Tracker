@@ -1,6 +1,11 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
 
-export type RecurringFrequency = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+export type RecurringFrequency =
+  | "DAILY"
+  | "WEEKLY"
+  | "BIWEEKLY"
+  | "MONTHLY"
+  | "YEARLY";
 
 export interface RecurringTransaction {
   recurringTransactionId: number;
@@ -74,6 +79,9 @@ export const calculateNextRunAt = (
       break;
     case "WEEKLY":
       date.setDate(date.getDate() + 7 * interval);
+      break;
+    case "BIWEEKLY":
+      date.setDate(date.getDate() + 14 * interval);
       break;
     case "MONTHLY":
       date.setMonth(date.getMonth() + interval);
