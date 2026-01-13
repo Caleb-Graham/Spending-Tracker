@@ -98,6 +98,7 @@ export const createTransactionNeon = async (
     categoryId?: number | null;
     isIncome: boolean;
     accountId: number;
+    recurringTransactionId?: number;
   },
   accessToken: string
 ): Promise<Transaction> => {
@@ -108,15 +109,21 @@ export const createTransactionNeon = async (
     ? Math.abs(transaction.amount)
     : -Math.abs(transaction.amount);
 
+  const insertData: Record<string, any> = {
+    Date: transaction.date,
+    Note: transaction.note,
+    Amount: finalAmount,
+    CategoryId: transaction.categoryId || null,
+    AccountId: transaction.accountId,
+  };
+
+  if (transaction.recurringTransactionId) {
+    insertData.RecurringTransactionId = transaction.recurringTransactionId;
+  }
+
   const { data, error } = await pg
     .from("Transactions")
-    .insert({
-      Date: transaction.date,
-      Note: transaction.note,
-      Amount: finalAmount,
-      CategoryId: transaction.categoryId || null,
-      AccountId: transaction.accountId,
-    })
+    .insert(insertData)
     .select();
 
   if (error) {

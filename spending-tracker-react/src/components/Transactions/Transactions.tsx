@@ -771,6 +771,84 @@ const Transactions = () => {
             .update({ RecurringTransactionId: null })
             .eq('TransactionId', editingTransaction.transactionId);
         }
+      } else if (editFormData.isRecurring) {
+        // Converting a non-recurring transaction to recurring
+        if (!editFormData.categoryId) {
+          setNotification({ message: 'Please select a category for recurring transactions', severity: 'error' });
+          setIsSaving(false);
+          return;
+        }
+
+        // Create a new recurring transaction record
+        const recurringTransaction = await createRecurringTransactionNeon(
+          {
+            amount: amount,
+            note: editFormData.note,
+            categoryId: parseInt(editFormData.categoryId),
+            frequency: editFormData.recurringFrequency,
+            interval: editFormData.recurringInterval,
+            startAt: editFormData.date,
+            isIncome: editFormData.isIncome,
+            accountId: editingTransaction.accountId,
+          },
+          accessToken
+        );
+
+        // Link the current transaction to the recurring transaction
+        const pg = PostgrestClientFactory.createClient(accessToken);
+        await pg
+          .from('Transactions')
+          .update({ RecurringTransactionId: recurringTransaction.recurringTransactionId })
+          .eq('TransactionId', editingTransaction.transactionId);
+
+        // Backfill any additional transactions between start date and today
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        
+        let nextDate = editFormData.date;
+        let backfilledCount = 0;
+        const maxBackfill = 100; // Safety limit
+        
+        // Calculate next occurrence after the initial transaction
+        const { calculateNextRunAt } = await import('../../services/recurringTransactionService');
+        nextDate = calculateNextRunAt(
+          nextDate + 'T12:00:00Z',
+          editFormData.recurringFrequency,
+          editFormData.recurringInterval
+        ).split('T')[0];
+        
+        // Create transactions for each occurrence up to today
+        while (nextDate <= todayStr && backfilledCount < maxBackfill) {
+          await createTransactionNeon(
+            {
+              date: nextDate,
+              note: editFormData.note,
+              amount: amount,
+              categoryId: parseInt(editFormData.categoryId),
+              isIncome: editFormData.isIncome,
+              accountId: editingTransaction.accountId,
+              recurringTransactionId: recurringTransaction.recurringTransactionId,
+            },
+            accessToken
+          );
+          
+          backfilledCount++;
+          nextDate = calculateNextRunAt(
+            nextDate + 'T12:00:00Z',
+            editFormData.recurringFrequency,
+            editFormData.recurringInterval
+          ).split('T')[0];
+        }
+
+        if (backfilledCount > 0) {
+          setNotification({ 
+            message: `Made recurring and created ${backfilledCount} additional transaction${backfilledCount > 1 ? 's' : ''} up to today`, 
+            severity: 'success' 
+          });
+          handleEditClose();
+          await loadTransactions();
+          return;
+        }
       }
 
       setNotification({ message: 'Transaction updated successfully', severity: 'success' });
@@ -878,8 +956,50 @@ const Transactions = () => {
           .update({ RecurringTransactionId: recurringTransaction.recurringTransactionId })
           .eq('TransactionId', createdTransaction.transactionId);
 
+        // Backfill any additional transactions between start date and today
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        
+        let nextDate = createFormData.date;
+        let backfilledCount = 0;
+        const maxBackfill = 100; // Safety limit
+        
+        // Calculate next occurrence after the initial transaction
+        const { calculateNextRunAt } = await import('../../services/recurringTransactionService');
+        nextDate = calculateNextRunAt(
+          nextDate + 'T12:00:00Z',
+          createFormData.recurringFrequency,
+          createFormData.recurringInterval
+        ).split('T')[0];
+        
+        // Create transactions for each occurrence up to today
+        while (nextDate <= todayStr && backfilledCount < maxBackfill) {
+          await createTransactionNeon(
+            {
+              date: nextDate,
+              note: createFormData.note,
+              amount: amount,
+              categoryId: parseInt(createFormData.categoryId),
+              isIncome: createFormData.isIncome,
+              accountId: accountId,
+              recurringTransactionId: recurringTransaction.recurringTransactionId,
+            },
+            accessToken
+          );
+          
+          backfilledCount++;
+          nextDate = calculateNextRunAt(
+            nextDate + 'T12:00:00Z',
+            createFormData.recurringFrequency,
+            createFormData.recurringInterval
+          ).split('T')[0];
+        }
+
+        const totalCreated = 1 + backfilledCount;
         setNotification({ 
-          message: `Created transaction and scheduled recurring ${createFormData.recurringFrequency.toLowerCase()} "${createFormData.note}"`, 
+          message: totalCreated > 1 
+            ? `Created ${totalCreated} transactions (backfilled to today) and scheduled recurring ${createFormData.recurringFrequency.toLowerCase()} "${createFormData.note}"`
+            : `Created transaction and scheduled recurring ${createFormData.recurringFrequency.toLowerCase()} "${createFormData.note}"`, 
           severity: 'success' 
         });
       } else {
@@ -1468,57 +1588,55 @@ const Transactions = () => {
             </FormControl>
             
             {/* Recurring Transaction Section */}
-            {editingTransaction?.recurringTransactionId && (
-              <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={editFormData.isRecurring}
-                      onChange={(e) => setEditFormData({ ...editFormData, isRecurring: e.target.checked })}
-                    />
-                  }
-                  label="Recurring"
-                  sx={{ mb: editFormData.isRecurring ? 2 : 0 }}
-                />
+            <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={editFormData.isRecurring}
+                    onChange={(e) => setEditFormData({ ...editFormData, isRecurring: e.target.checked })}
+                  />
+                }
+                label="Recurring"
+                sx={{ mb: editFormData.isRecurring ? 2 : 0 }}
+              />
 
-                {editFormData.isRecurring && (
-                  <>
-                    <FormControl fullWidth sx={{ mb: 2 }}>
-                      <InputLabel>Frequency</InputLabel>
-                      <Select
-                        value={editFormData.recurringFrequency}
-                        label="Frequency"
-                        onChange={(e) => setEditFormData({ 
-                          ...editFormData, 
-                          recurringFrequency: e.target.value as RecurringFrequency 
-                        })}
-                      >
-                        <MenuItem value="DAILY">Daily</MenuItem>
-                        <MenuItem value="WEEKLY">Weekly</MenuItem>
-                        <MenuItem value="BIWEEKLY">Biweekly</MenuItem>
-                        <MenuItem value="MONTHLY">Monthly</MenuItem>
-                        <MenuItem value="YEARLY">Yearly</MenuItem>
-                      </Select>
-                    </FormControl>
-                    
-                    {editFormData.recurringFrequency !== 'BIWEEKLY' && (
-                      <TextField
-                        label="Interval"
-                        type="number"
-                        value={editFormData.recurringInterval}
-                        onChange={(e) => setEditFormData({ 
-                          ...editFormData, 
-                          recurringInterval: parseInt(e.target.value) || 1 
-                        })}
-                        fullWidth
-                        slotProps={{ htmlInput: { min: 1 } }}
-                        helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
-                      />
-                    )}
-                  </>
-                )}
-              </Box>
-            )}
+              {editFormData.isRecurring && (
+                <>
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel>Frequency</InputLabel>
+                    <Select
+                      value={editFormData.recurringFrequency}
+                      label="Frequency"
+                      onChange={(e) => setEditFormData({ 
+                        ...editFormData, 
+                        recurringFrequency: e.target.value as RecurringFrequency 
+                      })}
+                    >
+                      <MenuItem value="DAILY">Daily</MenuItem>
+                      <MenuItem value="WEEKLY">Weekly</MenuItem>
+                      <MenuItem value="BIWEEKLY">Biweekly (Every 2 weeks)</MenuItem>
+                      <MenuItem value="MONTHLY">Monthly</MenuItem>
+                      <MenuItem value="YEARLY">Yearly</MenuItem>
+                    </Select>
+                  </FormControl>
+                  
+                  {editFormData.recurringFrequency !== 'BIWEEKLY' && (
+                    <TextField
+                      label="Interval"
+                      type="number"
+                      value={editFormData.recurringInterval}
+                      onChange={(e) => setEditFormData({ 
+                        ...editFormData, 
+                        recurringInterval: parseInt(e.target.value) || 1 
+                      })}
+                      fullWidth
+                      slotProps={{ htmlInput: { min: 1 } }}
+                      helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
+                    />
+                  )}
+                </>
+              )}
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleEditClose}>Cancel</Button>
