@@ -53,7 +53,7 @@ interface ParentPlanningData {
 }
 
 const Planning = () => {
-  const { isAuthenticated, getAccessToken } = useAuth();
+  const { user, isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   const [categories, setCategories] = useState<Category[]>([]);
   const [parentCategories, setParentCategories] = useState<Category[]>([]);
@@ -308,7 +308,7 @@ const Planning = () => {
         const yearlyAmount = budget.monthlyAmount * 12;
         try {
           if (yearlyAmount !== 0) {
-            await savePlanningBudgetNeon(accessToken!, {
+            await savePlanningBudgetNeon(accessToken!, user!.id, {
               categoryId: budget.categoryId,
               scenarioId: currentScenario.scenarioId,
               plannedAmount: yearlyAmount

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../utils/auth';
-import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency } from '../../services';
+import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency, getUserInfoBatch, type UserInfo } from '../../services';
 import { getUserAccountId } from '../../utils/accountUtils';
 import { getLocalToday } from '../../utils/dateUtils';
 import {
@@ -43,7 +43,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import './Transactions.css';
 
-type SortField = 'date' | 'note' | 'category' | 'amount' | 'type';
+type SortField = 'date' | 'note' | 'category' | 'amount' | 'type' | 'recurring';
 type SortDirection = 'asc' | 'desc';
 
 const Transactions = () => {
@@ -61,6 +61,8 @@ const Transactions = () => {
   // Filter states
   const [typeFilter, setTypeFilter] = useState<string>('all'); // 'all', 'income', 'expense'
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [personFilter, setPersonFilter] = useState<string>('all'); // 'all', 'me', or a specific userId
+  const [recurringFilter, setRecurringFilter] = useState<string>('all'); // 'all', 'recurring', 'one-time'
   const [searchTerm, setSearchTerm] = useState<string>('');
   
   // Initialize view period from localStorage with 1 hour expiry
@@ -115,6 +117,9 @@ const Transactions = () => {
   // Sorting states
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // User info cache for displaying who added transactions
+  const [userInfoMap, setUserInfoMap] = useState<Map<string, UserInfo | null>>(new Map());
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -289,6 +294,14 @@ const Transactions = () => {
     // Category filter
     if (categoryFilter !== 'all' && transaction.category?.categoryId !== parseInt(categoryFilter)) return false;
 
+    // Person filter - 'all', 'me', or a specific userId
+    if (personFilter === 'me' && transaction.userId !== user?.id) return false;
+    if (personFilter !== 'all' && personFilter !== 'me' && transaction.userId !== personFilter) return false;
+
+    // Recurring filter
+    if (recurringFilter === 'recurring' && !transaction.recurringTransactionId) return false;
+    if (recurringFilter === 'one-time' && transaction.recurringTransactionId) return false;
+
     // Search term filter (searches in note/description AND category name)
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -337,6 +350,10 @@ const Transactions = () => {
         aValue = a.isIncome ? 'INCOME' : 'EXPENSE';
         bValue = b.isIncome ? 'INCOME' : 'EXPENSE';
         break;
+      case 'recurring':
+        aValue = a.recurringTransactionId ? 1 : 0;
+        bValue = b.recurringTransactionId ? 1 : 0;
+        break;
       default:
         return 0;
     }
@@ -372,6 +389,29 @@ const Transactions = () => {
   useEffect(() => {
     setPage(0);
   }, [typeFilter, categoryFilter, searchTerm, viewPeriod, selectedDate, showFutureOnly]);
+
+  // Load user info for transactions added by others
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      // Get unique user IDs that aren't the current user
+      const otherUserIds = [...new Set(
+        transactions
+          .filter(t => t.userId && t.userId !== user?.id)
+          .map(t => t.userId!)
+      )];
+
+      if (otherUserIds.length === 0) return;
+
+      // Only fetch users we don't already have
+      const newUserIds = otherUserIds.filter(id => !userInfoMap.has(id));
+      if (newUserIds.length === 0) return;
+
+      const newUserInfo = await getUserInfoBatch(newUserIds);
+      setUserInfoMap(prev => new Map([...prev, ...newUserInfo]));
+    };
+
+    loadUserInfo();
+  }, [transactions, user?.id]);
 
   // Reset category filter when type filter changes (since available categories change)
   useEffect(() => {
@@ -464,6 +504,8 @@ const Transactions = () => {
   const clearFilters = () => {
     setTypeFilter('all');
     setCategoryFilter('all');
+    setPersonFilter('all');
+    setRecurringFilter('all');
     setSearchTerm('');
     setViewPeriod('month');
     setSelectedDate(new Date());
@@ -474,9 +516,25 @@ const Transactions = () => {
     let count = 0;
     if (typeFilter !== 'all') count++;
     if (categoryFilter !== 'all') count++;
+    if (personFilter !== 'all') count++;
+    if (recurringFilter !== 'all') count++;
     if (searchTerm) count++;
     if (showFutureOnly) count++;
     return count;
+  };
+
+  // Get unique users who have added transactions (for the person filter dropdown)
+  const getOtherUsers = () => {
+    const otherUserIds = new Set<string>();
+    transactions.forEach(t => {
+      if (t.userId && t.userId !== user?.id) {
+        otherUserIds.add(t.userId);
+      }
+    });
+    return Array.from(otherUserIds).map(id => ({
+      id,
+      name: userInfoMap.get(id)?.displayName || 'Unknown'
+    }));
   };
 
   const handleEditClick = async (transaction: Transaction) => {
@@ -931,6 +989,34 @@ const Transactions = () => {
                     ))}
                   </Select>
                 </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Added By</InputLabel>
+                  <Select
+                    value={personFilter}
+                    label="Added By"
+                    onChange={(e) => setPersonFilter(e.target.value)}
+                  >
+                    <MenuItem value="all">Everyone</MenuItem>
+                    <MenuItem value="me">{user?.displayName || 'Me'}</MenuItem>
+                    {getOtherUsers().map(otherUser => (
+                      <MenuItem key={otherUser.id} value={otherUser.id}>
+                        {otherUser.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Recurring</InputLabel>
+                  <Select
+                    value={recurringFilter}
+                    label="Recurring"
+                    onChange={(e) => setRecurringFilter(e.target.value)}
+                  >
+                    <MenuItem value="all">All Transactions</MenuItem>
+                    <MenuItem value="recurring">Recurring Only</MenuItem>
+                    <MenuItem value="one-time">One-time Only</MenuItem>
+                  </Select>
+                </FormControl>
                 <Button
                   variant="outlined"
                   onClick={() => { clearFilters(); setFilterAnchorEl(null); }}
@@ -1085,7 +1171,15 @@ const Transactions = () => {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 36, padding: '4px 8px' }}></TableCell>
-                <TableCell sx={{ width: 40, padding: '8px' }}></TableCell>
+                <TableCell sx={{ width: 40, padding: '8px' }}>
+                  <TableSortLabel
+                    active={sortField === 'recurring'}
+                    direction={sortField === 'recurring' ? sortDirection : 'asc'}
+                    onClick={() => handleSort('recurring')}
+                  >
+                    <RepeatIcon sx={{ fontSize: 18 }} />
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell>
                   <TableSortLabel
                     active={sortField === 'date'}
@@ -1160,18 +1254,44 @@ const Transactions = () => {
                     }}
                   >
                     <TableCell sx={{ width: 36, padding: '4px 8px', textAlign: 'center' }}>
-                      {transaction.userId && user?.id !== transaction.userId && (
-                        <Tooltip title="Added by another user" arrow>
+                      {transaction.userId && transaction.userId !== user?.id ? (
+                        (() => {
+                          const otherUser = userInfoMap.get(transaction.userId!);
+                          // Show "?" if user info hasn't loaded yet or in local dev
+                          const displayName = otherUser?.displayName || undefined;
+                          const initial = displayName ? displayName.charAt(0).toUpperCase() : '?';
+                          const tooltipText = displayName ? `Added by ${displayName}` : 'Added by someone else';
+                          return (
+                            <Tooltip title={tooltipText} arrow>
+                              <Avatar
+                                src={otherUser?.profileImageUrl || undefined}
+                                sx={{ 
+                                  width: 24, 
+                                  height: 24,
+                                  fontSize: 10,
+                                  bgcolor: 'secondary.main'
+                                }}
+                              >
+                                {initial}
+                              </Avatar>
+                            </Tooltip>
+                          );
+                        })()
+                      ) : transaction.userId && user?.displayName ? (
+                        <Tooltip title={`Added by ${user.displayName}`} arrow>
                           <Avatar
+                            src={user.profileImageUrl || undefined}
                             sx={{ 
                               width: 24, 
                               height: 24,
-                              fontSize: 12,
+                              fontSize: 10,
                               bgcolor: 'primary.main'
                             }}
-                          />
+                          >
+                            {user.displayName?.charAt(0)?.toUpperCase() || 'M'}
+                          </Avatar>
                         </Tooltip>
-                      )}
+                      ) : null}
                     </TableCell>
                     <TableCell sx={{ width: 40, padding: '8px', textAlign: 'center' }}>
                       {transaction.recurringTransactionId && (

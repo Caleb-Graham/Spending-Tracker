@@ -6,3 +6,4 @@ export * from "./netWorthService";
 export * from "./scenarioService";
 export * from "./planningService";
 export * from "./postgrestClientFactory";
+export * from "./userService";

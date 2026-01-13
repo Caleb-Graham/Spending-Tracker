@@ -1,24 +1,5 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
 
-// Helper function to decode JWT and extract user ID
-const getUserIdFromToken = (token: string): string => {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    const payload = JSON.parse(jsonPayload);
-    return payload.sub || payload.user_id || "";
-  } catch (error) {
-    console.error("Failed to decode token:", error);
-    return "";
-  }
-};
-
 export interface PlanningBudget {
   planningBudgetId: number;
   categoryId: number;
@@ -89,10 +70,10 @@ export const getPlanningBudgetsNeon = async (
 
 export const savePlanningBudgetNeon = async (
   accessToken: string,
+  userId: string,
   request: SavePlanningBudgetRequest
 ): Promise<PlanningBudget> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
-  const userId = getUserIdFromToken(accessToken);
 
   // Check if budget already exists
   const { data: existing } = await pg

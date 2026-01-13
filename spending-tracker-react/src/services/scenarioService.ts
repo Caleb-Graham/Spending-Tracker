@@ -1,24 +1,5 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
 
-// Helper function to decode JWT and extract user ID
-const getUserIdFromToken = (token: string): string => {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    const payload = JSON.parse(jsonPayload);
-    return payload.sub || payload.user_id || "";
-  } catch (error) {
-    console.error("Failed to decode token:", error);
-    return "";
-  }
-};
-
 export interface Scenario {
   scenarioId: number;
   name: string;
@@ -72,10 +53,10 @@ export const getScenariosNeon = async (
 
 export const createScenarioNeon = async (
   accessToken: string,
+  userId: string,
   request: CreateScenarioRequest
 ): Promise<Scenario> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
-  const userId = getUserIdFromToken(accessToken);
 
   const { data, error } = await pg
     .from("Scenarios")
@@ -151,11 +132,11 @@ export const deleteScenarioNeon = async (
 
 export const duplicateScenarioNeon = async (
   accessToken: string,
+  userId: string,
   sourceScenarioId: number,
   request: DuplicateScenarioRequest
 ): Promise<Scenario> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
-  const userId = getUserIdFromToken(accessToken);
 
   // Create new scenario
   const { data: newScenario, error: createError } = await pg

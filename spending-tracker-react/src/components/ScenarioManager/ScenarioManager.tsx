@@ -46,7 +46,7 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
   onScenarioChange,
   onScenariosUpdated
 }) => {
-  const { isAuthenticated, getAccessToken } = useAuth();
+  const { user, isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -76,7 +76,7 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
         description: formData.description.trim() || undefined
       };
       
-      await createScenarioNeon(accessToken!, request);
+      await createScenarioNeon(accessToken!, user!.id, request);
       setSuccessMessage('Scenario created successfully!');
       setCreateDialogOpen(false);
       setFormData({ name: '', description: '' });
@@ -137,7 +137,7 @@ const ScenarioManager: React.FC<ScenarioManagerProps> = ({
         description: formData.description.trim() || undefined
       };
       
-      await duplicateScenarioNeon(accessToken!, selectedScenario.scenarioId, request);
+      await duplicateScenarioNeon(accessToken!, user!.id, selectedScenario.scenarioId, request);
       setSuccessMessage('Scenario duplicated successfully!');
       setDuplicateDialogOpen(false);
       setSelectedScenario(null);
