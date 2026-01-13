@@ -1171,15 +1171,7 @@ const Transactions = () => {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 36, padding: '4px 8px' }}></TableCell>
-                <TableCell sx={{ width: 40, padding: '8px' }}>
-                  <TableSortLabel
-                    active={sortField === 'recurring'}
-                    direction={sortField === 'recurring' ? sortDirection : 'asc'}
-                    onClick={() => handleSort('recurring')}
-                  >
-                    <RepeatIcon sx={{ fontSize: 18 }} />
-                  </TableSortLabel>
-                </TableCell>
+                <TableCell sx={{ width: 24, padding: '4px 0' }}></TableCell>
                 <TableCell>
                   <TableSortLabel
                     active={sortField === 'date'}
@@ -1293,20 +1285,24 @@ const Transactions = () => {
                         </Tooltip>
                       ) : null}
                     </TableCell>
-                    <TableCell sx={{ width: 40, padding: '8px', textAlign: 'center' }}>
+                    <TableCell sx={{ width: 24, paddingLeft: '4px', paddingRight: '4px', textAlign: 'center' }}>
                       {transaction.recurringTransactionId && (
                         <RepeatIcon 
                           sx={{ 
-                            fontSize: 18, 
+                            fontSize: 16, 
                             color: 'primary.main',
-                            opacity: 0.7,
-                            display: 'block'
+                            opacity: 0.7
                           }} 
                           titleAccess="Recurring transaction"
                         />
                       )}
                     </TableCell>
-                    <TableCell>{transaction.date.split('T')[0]}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const [year, month, day] = transaction.date.split('T')[0].split('-');
+                        return `${month}-${day}-${year}`;
+                      })()}
+                    </TableCell>
                     <TableCell>{transaction.note}</TableCell>
                     <TableCell>{transaction.category?.name || 'Uncategorized'}</TableCell>
                     <TableCell 
