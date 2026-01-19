@@ -191,6 +191,7 @@ export const updateRecurringTransactionNeon = async (
     frequency?: RecurringFrequency;
     interval?: number;
     isActive?: boolean;
+    nextRunAt?: string;
   },
   accessToken: string
 ): Promise<void> => {
@@ -207,6 +208,7 @@ export const updateRecurringTransactionNeon = async (
   if (updates.frequency !== undefined) updateData.Frequency = updates.frequency;
   if (updates.interval !== undefined) updateData.Interval = updates.interval;
   if (updates.isActive !== undefined) updateData.IsActive = updates.isActive;
+  if (updates.nextRunAt !== undefined) updateData.NextRunAt = updates.nextRunAt;
 
   const { error } = await pg
     .from("RecurringTransactions")

@@ -746,13 +746,42 @@ const Transactions = () => {
       if (editingTransaction.recurringTransactionId) {
         if (editFormData.isRecurring) {
           // Update recurring transaction properties
-          const { updateRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+          const { updateRecurringTransactionNeon, calculateNextRunAt } = await import('../../services/recurringTransactionService');
+          
+          // Calculate the next run date based on today's date if the calculated next run would be in the past
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          
+          // Calculate what the next run should be from the transaction date
+          const nextRunAt = calculateNextRunAt(
+            editFormData.date + 'T12:00:00Z',
+            editFormData.recurringFrequency,
+            editFormData.recurringInterval
+          );
+          
+          // If the next run is in the past, keep calculating forward until we get a future date
+          let calculatedNextRunAt = nextRunAt;
+          let checkDate = editFormData.date;
+          const maxIterations = 1000; // Safety limit
+          let iterations = 0;
+          
+          while (calculatedNextRunAt.split('T')[0] <= todayStr && iterations < maxIterations) {
+            checkDate = calculatedNextRunAt.split('T')[0];
+            calculatedNextRunAt = calculateNextRunAt(
+              checkDate + 'T12:00:00Z',
+              editFormData.recurringFrequency,
+              editFormData.recurringInterval
+            );
+            iterations++;
+          }
+          
           await updateRecurringTransactionNeon(
             editingTransaction.recurringTransactionId,
             {
               frequency: editFormData.recurringFrequency,
               interval: editFormData.recurringInterval,
-              isActive: editFormData.recurringIsActive
+              isActive: editFormData.recurringIsActive,
+              nextRunAt: calculatedNextRunAt
             },
             accessToken
           );
