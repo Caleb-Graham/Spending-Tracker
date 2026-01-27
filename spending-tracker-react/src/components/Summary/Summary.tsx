@@ -28,11 +28,9 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { startOfYear, subDays, startOfMonth } from 'date-fns';
 import { 
-  getIncomeExpenseSummaryNeon, 
   getAllCategoriesNeon, 
-  getDetailedCategorySummaryNeon, 
+  getDetailedCategorySummariesNeon, 
   getTransactionsNeon,
-  type CategorySummary, 
   type Category, 
   type DetailedCategorySummary
 } from '../../services';
@@ -99,8 +97,10 @@ const Summary = () => {
         return null;
     }
   });
-  const [detailedCategorySummary, setDetailedCategorySummary] = useState<DetailedCategorySummary[]>([]);
-  const [incomeExpenseData, setIncomeExpenseData] = useState<{ income: CategorySummary[], expenses: CategorySummary[] }>({ income: [], expenses: [] });
+  const [detailedCategorySummary, setDetailedCategorySummary] = useState<{
+    income: DetailedCategorySummary[];
+    expenses: DetailedCategorySummary[];
+  }>({ income: [], expenses: [] });
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -335,21 +335,18 @@ const Summary = () => {
       const endDateStr = endDate ? endDate.toISOString().split('T')[0] : undefined;
       
       // Load all data we need - using Neon APIs
-      const [detailedSummary, incomeExpense, categories] = await Promise.all([
-        getDetailedCategorySummaryNeon(accessToken, startDateStr, endDateStr),
-        getIncomeExpenseSummaryNeon(accessToken, startDateStr, endDateStr),
+      const [detailedSummary, categories] = await Promise.all([
+        getDetailedCategorySummariesNeon(accessToken, startDateStr, endDateStr),
         getAllCategoriesNeon(accessToken)
       ]);
       
       setDetailedCategorySummary(detailedSummary);
-      setIncomeExpenseData(incomeExpense);
       setAllCategories(categories);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setError('Failed to load data: ' + errorMessage);
       console.error('Failed to load category summary:', error);
-      setDetailedCategorySummary([]);
-      setIncomeExpenseData({ income: [], expenses: [] });
+      setDetailedCategorySummary({ income: [], expenses: [] });
       setAllCategories([]);
     } finally {
       setIsLoading(false);
@@ -450,7 +447,7 @@ const Summary = () => {
     const links: any[] = [];
 
     // Add income sources as nodes (left side) - sorted by amount descending
-    incomeExpenseData.income
+    detailedCategorySummary.income
       .sort((a, b) => b.amount - a.amount)
       .forEach(income => {
         nodes.push({
@@ -468,7 +465,7 @@ const Summary = () => {
     });
 
     // Use the groupByParent function to get properly hierarchical data
-    const groupedExpenses = groupByParent(detailedCategorySummary);
+    const groupedExpenses = groupByParent(detailedCategorySummary.expenses);
     
     // Add parent expense categories as nodes - sorted by amount descending
     groupedExpenses
@@ -495,7 +492,7 @@ const Summary = () => {
       });
 
     // Create links from income to "Available Money"
-    incomeExpenseData.income
+    detailedCategorySummary.income
       .sort((a, b) => b.amount - a.amount)
       .forEach(income => {
         links.push({
@@ -530,7 +527,7 @@ const Summary = () => {
       });
 
     // If we don't have income data yet, create a dummy income source
-    if (incomeExpenseData.income.length === 0 && groupedExpenses.length > 0) {
+    if (detailedCategorySummary.income.length === 0 && groupedExpenses.length > 0) {
       const totalExpenses = groupedExpenses.reduce((sum, exp) => sum + exp.amount, 0);
       nodes.unshift({
         id: 'income-total',
@@ -681,10 +678,10 @@ const Summary = () => {
 
           {/* Right: Expand all - only when in Data view and there are collapsible rows */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {displayView === 'data' && groupByParent(viewMode === 'expenses' ? detailedCategorySummary : incomeExpenseData.income).some(item => item.children && item.children.length > 0) && (
+            {displayView === 'data' && groupByParent(viewMode === 'expenses' ? detailedCategorySummary.expenses : detailedCategorySummary.income).some(item => item.children && item.children.length > 0) && (
               <Button
                 onClick={() => {
-                  const data = viewMode === 'expenses' ? detailedCategorySummary : incomeExpenseData.income;
+                  const data = viewMode === 'expenses' ? detailedCategorySummary.expenses : detailedCategorySummary.income;
                   const groupedData = groupByParent(data);
                   const allExpanded = groupedData.every(item => expandedParents.has(item.categoryId));
                   if (allExpanded || expandedParents.size > 0) {
@@ -736,7 +733,7 @@ const Summary = () => {
                   </TableRow>
                 ) : (() => {
                   // Get data based on view mode
-                  const sourceData = viewMode === 'expenses' ? detailedCategorySummary : incomeExpenseData.income;
+                  const sourceData = viewMode === 'expenses' ? detailedCategorySummary.expenses : detailedCategorySummary.income;
                   
                   if (sourceData.length === 0) {
                     return (
@@ -836,26 +833,29 @@ const Summary = () => {
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
               <CircularProgress />
             </div>
-          ) : detailedCategorySummary.length === 0 ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
-              <Typography variant="body1" color="text.secondary">
-                No spending data found for the selected date range.
-              </Typography>
-            </div>
-          ) : (
+          ) : (() => {
+            // Filter data based on view mode before checking if empty
+            const sourceData = viewMode === 'expenses' 
+              ? detailedCategorySummary.expenses 
+              : detailedCategorySummary.income;
+            
+            return sourceData.length === 0 ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+                <Typography variant="body1" color="text.secondary">
+                  No {viewMode === 'expenses' ? 'spending' : 'income'} data found for the selected date range.
+                </Typography>
+              </div>
+            ) : (
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <D3PieChart 
                 data={(() => {
-                  // Get the appropriate data based on view mode
-                  const filteredData = viewMode === 'expenses' 
-                    ? detailedCategorySummary 
-                    : detailedCategorySummary.filter((cat: any) => {
-                        const category = allCategories.find(c => c.categoryId === cat.categoryId);
-                        return category?.type === 'income';
-                      });
+                  // Use the appropriate data source based on view mode
+                  const sourceData = viewMode === 'expenses' 
+                    ? detailedCategorySummary.expenses 
+                    : detailedCategorySummary.income;
                   
                   // Group by parent
-                  const grouped = groupByParent(filteredData);
+                  const grouped = groupByParent(sourceData);
                   
                   // Filter out any items that are child categories in allCategories
                   // (defensive check to ensure no children slip through)
@@ -878,7 +878,8 @@ const Summary = () => {
                 height={900} 
               />
             </div>
-          )}
+            );
+          })()}
         </Paper>
       </Box>
       )}
@@ -891,7 +892,7 @@ const Summary = () => {
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
               <CircularProgress />
             </div>
-          ) : detailedCategorySummary.length === 0 ? (
+          ) : detailedCategorySummary.income.length === 0 && detailedCategorySummary.expenses.length === 0 ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
               <Typography variant="body1" color="text.secondary">
                 No data available for the selected date range.

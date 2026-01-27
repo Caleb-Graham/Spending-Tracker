@@ -59,94 +59,12 @@ export interface UpdateParentCategoryRequest {
 }
 
 // Neon Data API versions of summary functions
-export const getCategorySummaryNeon = async (
+
+// Get detailed category summary for expenses only (private - used by getDetailedCategorySummariesNeon)
+const getDetailedCategorySummaryNeon = async (
   accessToken: string,
   startDate?: string,
-  endDate?: string
-): Promise<CategorySummary[]> => {
-  const pg = PostgrestClientFactory.createClient(accessToken);
-
-  // Build query - get expense transactions (Amount < 0) with category joins
-  // Use explicit foreign key syntax: Categories!CategoryId to specify the join column
-  let query = pg
-    .from("Transactions")
-    .select(
-      `
-      Amount,
-      Categories!CategoryId(CategoryId, Name, Type, ParentCategoryId, ParentCategory:Categories!ParentCategoryId(CategoryId, Name))
-    `
-    )
-    .lt("Amount", 0); // Only expenses
-
-  if (startDate) {
-    query = query.gte("Date", startDate);
-  }
-  if (endDate) {
-    query = query.lte("Date", endDate);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(error.message || "Failed to fetch category summary");
-  }
-
-  if (!data || data.length === 0) {
-    return [];
-  }
-
-  // Group by parent category (similar to backend logic)
-  const categoryMap = new Map<
-    number,
-    { categoryId: number; categoryName: string; totalAmount: number }
-  >();
-
-  data.forEach((row: any) => {
-    const category = row.Categories;
-    const parentCategory = category.ParentCategory;
-
-    // Use parent category if it exists, otherwise use the category itself
-    const categoryId = parentCategory?.CategoryId || category.CategoryId;
-    const categoryName = parentCategory?.Name || category.Name;
-
-    if (!categoryMap.has(categoryId)) {
-      categoryMap.set(categoryId, {
-        categoryId,
-        categoryName: categoryName || "Uncategorized",
-        totalAmount: 0,
-      });
-    }
-
-    const entry = categoryMap.get(categoryId)!;
-    entry.totalAmount += row.Amount; // Sum negative amounts
-  });
-
-  // Calculate total spending and percentages
-  const categories = Array.from(categoryMap.values());
-  const totalSpending = categories.reduce(
-    (sum, cat) => sum + Math.abs(cat.totalAmount),
-    0
-  );
-
-  const result = categories
-    .map((cat) => ({
-      categoryId: cat.categoryId,
-      categoryName: cat.categoryName,
-      amount: Math.abs(cat.totalAmount), // Make positive
-      percentage:
-        totalSpending > 0
-          ? (Math.abs(cat.totalAmount) / totalSpending) * 100
-          : 0,
-    }))
-    .sort((a, b) => b.amount - a.amount); // Order by highest spending first
-
-  return result;
-};
-
-export const getDetailedCategorySummaryNeon = async (
-  accessToken: string,
-  startDate?: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<DetailedCategorySummary[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -158,7 +76,7 @@ export const getDetailedCategorySummaryNeon = async (
       `
       Amount,
       Categories!CategoryId(CategoryId, Name, Type, ParentCategoryId, ParentCategory:Categories!ParentCategoryId(CategoryId, Name))
-    `
+    `,
     )
     .lt("Amount", 0); // Only expenses
 
@@ -173,7 +91,7 @@ export const getDetailedCategorySummaryNeon = async (
 
   if (error) {
     throw new Error(
-      error.message || "Failed to fetch detailed category summary"
+      error.message || "Failed to fetch detailed category summary",
     );
   }
 
@@ -228,7 +146,7 @@ export const getDetailedCategorySummaryNeon = async (
   const categories = Array.from(categoryMap.values());
   const totalSpending = categories.reduce(
     (sum, cat) => sum + Math.abs(cat.totalAmount),
-    0
+    0,
   );
 
   const result = categories
@@ -249,162 +167,123 @@ export const getDetailedCategorySummaryNeon = async (
   return result;
 };
 
-export const getIncomeExpenseSummaryNeon = async (
+// Get detailed category summaries for both income and expenses
+export const getDetailedCategorySummariesNeon = async (
   accessToken: string,
   startDate?: string,
-  endDate?: string
-): Promise<{ income: CategorySummary[]; expenses: CategorySummary[] }> => {
-  try {
-    const pg = PostgrestClientFactory.createClient(accessToken);
+  endDate?: string,
+): Promise<{
+  income: DetailedCategorySummary[];
+  expenses: DetailedCategorySummary[];
+}> => {
+  const [expenses, income] = await Promise.all([
+    getDetailedCategorySummaryNeon(accessToken, startDate, endDate),
+    getDetailedCategorySummaryForIncomeNeon(accessToken, startDate, endDate),
+  ]);
 
-    // Fetch income transactions (Amount > 0)
-    // Use explicit foreign key syntax: Categories!CategoryId
-    let incomeQuery = pg
-      .from("Transactions")
-      .select(
-        `
-        Amount,
-        Categories!CategoryId(CategoryId, Name, Type, ParentCategoryId, ParentCategory:Categories!ParentCategoryId(Name))
+  return { income, expenses };
+};
+
+// Get detailed category summary for income (similar to expenses but for positive amounts)
+const getDetailedCategorySummaryForIncomeNeon = async (
+  accessToken: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<DetailedCategorySummary[]> => {
+  const pg = PostgrestClientFactory.createClient(accessToken);
+
+  let query = pg
+    .from("Transactions")
+    .select(
       `
-      )
-      .gt("Amount", 0);
+      Amount,
+      Categories!CategoryId(CategoryId, Name, Type, ParentCategoryId, ParentCategory:Categories!ParentCategoryId(CategoryId, Name))
+    `,
+    )
+    .gt("Amount", 0); // Only income
 
-    if (startDate) {
-      incomeQuery = incomeQuery.gte("Date", startDate);
-    }
-    if (endDate) {
-      incomeQuery = incomeQuery.lte("Date", endDate);
-    }
-
-    const { data: incomeData, error: incomeError } = await incomeQuery;
-
-    if (incomeError) {
-      throw new Error(incomeError.message || "Failed to fetch income data");
-    }
-
-    // Fetch expense transactions (Amount < 0)
-    // Use explicit foreign key syntax: Categories!CategoryId
-    let expenseQuery = pg
-      .from("Transactions")
-      .select(
-        `
-        Amount,
-        Categories!CategoryId(CategoryId, Name, Type, ParentCategoryId, ParentCategory:Categories!ParentCategoryId(CategoryId, Name))
-      `
-      )
-      .lt("Amount", 0);
-
-    if (startDate) {
-      expenseQuery = expenseQuery.gte("Date", startDate);
-    }
-    if (endDate) {
-      expenseQuery = expenseQuery.lte("Date", endDate);
-    }
-
-    const { data: expenseData, error: expenseError } = await expenseQuery;
-
-    if (expenseError) {
-      throw new Error(expenseError.message || "Failed to fetch expense data");
-    }
-
-    // Process income data - group by category and filter for Income parent
-    const incomeMap = new Map<
-      number,
-      { categoryId: number; categoryName: string; totalAmount: number }
-    >();
-
-    incomeData?.forEach((row: any) => {
-      const category = row.Categories;
-      // const parentCategory = category.ParentCategory;
-
-      // For income, we'll include all positive transactions regardless of category structure
-      // since Amount > 0 already filters to income transactions
-      if (!incomeMap.has(category.CategoryId)) {
-        incomeMap.set(category.CategoryId, {
-          categoryId: category.CategoryId,
-          categoryName: category.Name,
-          totalAmount: 0,
-        });
-      }
-
-      const entry = incomeMap.get(category.CategoryId)!;
-      entry.totalAmount += row.Amount;
-    });
-
-    // Process expense data - group by parent category
-    const expenseMap = new Map<
-      number,
-      { categoryId: number; categoryName: string; totalAmount: number }
-    >();
-
-    expenseData?.forEach((row: any) => {
-      const category = row.Categories;
-      const parentCategory = category.ParentCategory;
-
-      const categoryId = parentCategory?.CategoryId || category.CategoryId;
-      const categoryName = parentCategory?.Name || category.Name;
-
-      if (!expenseMap.has(categoryId)) {
-        expenseMap.set(categoryId, {
-          categoryId,
-          categoryName: categoryName || "Uncategorized",
-          totalAmount: 0,
-        });
-      }
-
-      const entry = expenseMap.get(categoryId)!;
-      entry.totalAmount += row.Amount; // Sum negative amounts
-    });
-
-    // Calculate totals and percentages for income
-    const incomeCategories = Array.from(incomeMap.values());
-    const totalIncome = incomeCategories.reduce(
-      (sum, cat) => sum + cat.totalAmount,
-      0
-    );
-
-    const incomeSummary = incomeCategories
-      .map((cat) => ({
-        categoryId: cat.categoryId,
-        categoryName: cat.categoryName,
-        amount: cat.totalAmount,
-        percentage: totalIncome > 0 ? (cat.totalAmount / totalIncome) * 100 : 0,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    // Calculate totals and percentages for expenses
-    const expenseCategories = Array.from(expenseMap.values());
-    const totalExpenses = expenseCategories.reduce(
-      (sum, cat) => sum + Math.abs(cat.totalAmount),
-      0
-    );
-
-    const expenseSummary = expenseCategories
-      .map((cat) => ({
-        categoryId: cat.categoryId,
-        categoryName: cat.categoryName,
-        amount: Math.abs(cat.totalAmount),
-        percentage:
-          totalExpenses > 0
-            ? (Math.abs(cat.totalAmount) / totalExpenses) * 100
-            : 0,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    return {
-      income: incomeSummary,
-      expenses: expenseSummary,
-    };
-  } catch (error) {
-    console.error("Failed to load income/expense summary:", error);
-    return { income: [], expenses: [] };
+  if (startDate) {
+    query = query.gte("Date", startDate);
   }
+  if (endDate) {
+    query = query.lte("Date", endDate);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message || "Failed to fetch detailed income summary");
+  }
+
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // Group by actual category
+  const categoryMap = new Map<
+    number,
+    {
+      categoryId: number;
+      categoryName: string;
+      totalAmount: number;
+      parentCategoryId?: number;
+      parentCategoryName?: string;
+      type: string;
+    }
+  >();
+
+  data.forEach((row: any) => {
+    const category = row.Categories;
+    const parentCategory = category.ParentCategory;
+
+    if (!categoryMap.has(category.CategoryId)) {
+      let parentName: string | undefined;
+
+      if (parentCategory) {
+        if (Array.isArray(parentCategory) && parentCategory.length > 0) {
+          parentName = parentCategory[0]?.Name;
+        } else if (parentCategory.Name) {
+          parentName = parentCategory.Name;
+        }
+      }
+
+      categoryMap.set(category.CategoryId, {
+        categoryId: category.CategoryId,
+        categoryName: category.Name || "Uncategorized",
+        totalAmount: 0,
+        parentCategoryId: category.ParentCategoryId,
+        parentCategoryName: parentName,
+        type: category.Type,
+      });
+    }
+
+    const entry = categoryMap.get(category.CategoryId)!;
+    entry.totalAmount += row.Amount;
+  });
+
+  // Calculate total income and percentages
+  const categories = Array.from(categoryMap.values());
+  const totalIncome = categories.reduce((sum, cat) => sum + cat.totalAmount, 0);
+
+  const result = categories
+    .map((cat) => ({
+      categoryId: cat.categoryId,
+      categoryName: cat.categoryName,
+      amount: cat.totalAmount,
+      percentage: totalIncome > 0 ? (cat.totalAmount / totalIncome) * 100 : 0,
+      parentCategoryId: cat.parentCategoryId,
+      parentCategoryName: cat.parentCategoryName,
+      type: cat.type,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  return result;
 };
 
 // Category Management API functions
 // Neon Data API version
 export const getAllCategoriesNeon = async (
-  accessToken: string
+  accessToken: string,
 ): Promise<Category[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -419,7 +298,7 @@ export const getAllCategoriesNeon = async (
       ParentCategoryId,
       IsArchived,
       ParentCategory:Categories!ParentCategoryId(Name)
-    `
+    `,
     )
     .order("Name", { ascending: true });
 
@@ -443,7 +322,7 @@ export const getAllCategoriesNeon = async (
 
 // Combined function to fetch all category data in a single request
 export const getAllCategoryDataNeon = async (
-  accessToken: string
+  accessToken: string,
 ): Promise<{
   allCategories: Category[];
   parentCategories: Category[];
@@ -461,7 +340,7 @@ export const getAllCategoryDataNeon = async (
       Type,
       ParentCategoryId,
       ParentCategory:Categories!ParentCategoryId(Name)
-    `
+    `,
     )
     .order("Name", { ascending: true });
 
@@ -506,7 +385,7 @@ export const getAllCategoryDataNeon = async (
 
 export const getParentCategoriesNeon = async (
   accessToken: string,
-  type?: string
+  type?: string,
 ): Promise<Category[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -540,7 +419,7 @@ export const getParentCategoriesNeon = async (
 
 export const getCategoryMappingsNeon = async (
   accessToken: string,
-  type?: string
+  type?: string,
 ): Promise<CategoryMapping[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -587,7 +466,7 @@ export const getCategoryMappingsNeon = async (
 
 export const createParentCategoryNeon = async (
   accessToken: string,
-  request: CreateParentCategoryRequest
+  request: CreateParentCategoryRequest,
 ): Promise<Category> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -627,7 +506,7 @@ export const createParentCategoryNeon = async (
 export const updateParentCategoryNeon = async (
   accessToken: string,
   categoryId: number,
-  request: UpdateParentCategoryRequest
+  request: UpdateParentCategoryRequest,
 ): Promise<Category> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -660,7 +539,7 @@ export const updateParentCategoryNeon = async (
 
 export const deleteParentCategoryNeon = async (
   accessToken: string,
-  categoryId: number
+  categoryId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -676,7 +555,7 @@ export const deleteParentCategoryNeon = async (
 
 export const createCategoryMappingNeon = async (
   accessToken: string,
-  request: CreateCategoryMappingRequest
+  request: CreateCategoryMappingRequest,
 ): Promise<CategoryMapping> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -695,7 +574,7 @@ export const createCategoryMappingNeon = async (
 
     if (parentError || !parentCategory) {
       throw new Error(
-        `Parent category "${request.parentCategoryName}" not found`
+        `Parent category "${request.parentCategoryName}" not found`,
       );
     }
 
@@ -742,7 +621,7 @@ export const createCategoryMappingNeon = async (
 export const updateCategoryMappingNeon = async (
   accessToken: string,
   categoryId: number,
-  request: UpdateCategoryMappingRequest
+  request: UpdateCategoryMappingRequest,
 ): Promise<CategoryMapping> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -758,7 +637,7 @@ export const updateCategoryMappingNeon = async (
 
     if (parentError || !parentCategory) {
       throw new Error(
-        `Parent category "${request.parentCategoryName}" not found`
+        `Parent category "${request.parentCategoryName}" not found`,
       );
     }
 
@@ -801,7 +680,7 @@ export const updateCategoryMappingNeon = async (
 
 export const deleteCategoryMappingNeon = async (
   accessToken: string,
-  categoryId: number
+  categoryId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -818,7 +697,7 @@ export const deleteCategoryMappingNeon = async (
 // Archive a category (soft delete - hides from view but preserves data)
 export const archiveCategoryNeon = async (
   accessToken: string,
-  categoryId: number
+  categoryId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -835,7 +714,7 @@ export const archiveCategoryNeon = async (
 // Unarchive a category
 export const unarchiveCategoryNeon = async (
   accessToken: string,
-  categoryId: number
+  categoryId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 

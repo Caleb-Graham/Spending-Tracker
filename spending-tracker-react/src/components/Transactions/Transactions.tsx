@@ -1306,8 +1306,8 @@ const Transactions = () => {
             const txDateStr = t.date.split('T')[0]; // Get just the date part
             if (periodStartStr && txDateStr < periodStartStr) return false;
             if (periodEndStr && txDateStr > periodEndStr) return false;
-            // Only filter by 'now' if we're looking at current or future period
-            if (periodEndStr && periodEndStr > todayStr && txDateStr > todayStr) return false;
+            // Exclude future transactions unless showFutureOnly toggle is on
+            if (!showFutureOnly && txDateStr > todayStr) return false;
             return true;
           });
           
