@@ -30,8 +30,10 @@ export interface CreateRecurringTransactionInput {
   frequency: RecurringFrequency;
   interval?: number;
   startAt: string;
+  endAt?: string | null; // Optional end date for the recurring transaction
   isIncome: boolean;
   accountId: number;
+  userId?: string; // Optional userId to preserve original owner
 }
 
 // Transform database row to TypeScript interface
@@ -204,17 +206,29 @@ export const createRecurringTransactionNeon = async (
 
   const interval = input.interval || 1;
 
+  const insertData: any = {
+    Amount: finalAmount,
+    Note: input.note,
+    CategoryId: input.categoryId,
+    Frequency: input.frequency,
+    Interval: interval,
+    StartAt: input.startAt,
+    AccountId: input.accountId,
+  };
+
+  // If endAt is provided, set it
+  if (input.endAt !== undefined) {
+    insertData.EndAt = input.endAt;
+  }
+
+  // If userId is provided, set it explicitly (for preserving original owner)
+  if (input.userId) {
+    insertData.UserId = input.userId;
+  }
+
   const { data, error } = await pg
     .from("RecurringTransactions")
-    .insert({
-      Amount: finalAmount,
-      Note: input.note,
-      CategoryId: input.categoryId,
-      Frequency: input.frequency,
-      Interval: interval,
-      StartAt: input.startAt,
-      AccountId: input.accountId,
-    })
+    .insert(insertData)
     .select("*");
 
   if (error) {
@@ -272,13 +286,10 @@ export const deleteRecurringTransactionNeon = async (
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
-  // Stop recurring by setting EndAt to now
+  // Hard delete the recurring transaction
   const { error } = await pg
     .from("RecurringTransactions")
-    .update({
-      EndAt: new Date().toISOString(),
-      UpdatedAt: new Date().toISOString(),
-    })
+    .delete()
     .eq("RecurringTransactionId", recurringTransactionId);
 
   if (error) {

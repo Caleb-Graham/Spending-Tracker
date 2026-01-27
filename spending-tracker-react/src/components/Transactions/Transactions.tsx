@@ -133,6 +133,7 @@ const Transactions = () => {
     isRecurring: false,
     recurringFrequency: 'MONTHLY' as RecurringFrequency,
     recurringInterval: 1,
+    recurringEndDate: '', // End date for recurring transactions
     recurringIsActive: true
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -148,7 +149,8 @@ const Transactions = () => {
     isIncome: false,
     isRecurring: false,
     recurringFrequency: 'MONTHLY' as RecurringFrequency,
-    recurringInterval: 1
+    recurringInterval: 1,
+    recurringEndDate: '' // End date for recurring transactions
   });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -556,6 +558,7 @@ const Transactions = () => {
       isRecurring: !!transaction.recurringTransactionId,
       recurringFrequency: 'MONTHLY' as RecurringFrequency,
       recurringInterval: 1,
+      recurringEndDate: '',
       recurringIsActive: true
     };
     
@@ -572,6 +575,7 @@ const Transactions = () => {
             isRecurring: true,
             recurringFrequency: recurring.frequency,
             recurringInterval: recurring.interval,
+            recurringEndDate: recurring.endAt ? recurring.endAt.split('T')[0] : '',
             recurringIsActive: true // No longer using isActive field
           };
         }
@@ -603,6 +607,7 @@ const Transactions = () => {
       isRecurring: false,
       recurringFrequency: 'MONTHLY' as RecurringFrequency,
       recurringInterval: 1,
+      recurringEndDate: '',
       recurringIsActive: true
     });
   };
@@ -642,6 +647,7 @@ const Transactions = () => {
           isRecurring: true,
           recurringFrequency: recurring.frequency,
           recurringInterval: recurring.interval,
+          recurringEndDate: recurring.endAt ? recurring.endAt.split('T')[0] : '',
           recurringIsActive: true
         });
         setEditDialogOpen(true);
@@ -675,7 +681,8 @@ const Transactions = () => {
             categoryId: virtualTransactionToEdit.categoryId,
             isIncome: virtualTransactionToEdit.isIncome,
             accountId: virtualTransactionToEdit.accountId,
-            // Don't link to recurring transaction - this is now a one-time edit
+            ...(virtualTransactionToEdit.recurringTransactionId ? { recurringTransactionId: virtualTransactionToEdit.recurringTransactionId } : {}), // Link to recurring transaction for deduplication
+            userId: virtualTransactionToEdit.userId, // Preserve original owner
           },
           accessToken
         );
@@ -699,6 +706,7 @@ const Transactions = () => {
           isRecurring: false,
           recurringFrequency: 'MONTHLY' as RecurringFrequency,
           recurringInterval: 1,
+          recurringEndDate: '',
           recurringIsActive: true
         });
         setEditDialogOpen(true);
@@ -918,8 +926,10 @@ const Transactions = () => {
             frequency: editFormData.recurringFrequency,
             interval: editFormData.recurringInterval,
             startAt: editFormData.date,
+            endAt: editFormData.recurringEndDate || null,
             isIncome: editFormData.isIncome,
             accountId: editingTransaction.accountId,
+            userId: editingTransaction.userId, // Preserve original owner
           },
           accessToken
         );
@@ -958,6 +968,7 @@ const Transactions = () => {
               isIncome: editFormData.isIncome,
               accountId: editingTransaction.accountId,
               recurringTransactionId: recurringTransaction.recurringTransactionId,
+              userId: editingTransaction.userId, // Preserve original owner
             },
             accessToken
           );
@@ -1002,7 +1013,8 @@ const Transactions = () => {
       isIncome: false,
       isRecurring: false,
       recurringFrequency: 'MONTHLY' as RecurringFrequency,
-      recurringInterval: 1
+      recurringInterval: 1,
+      recurringEndDate: ''
     });
     setCreateDialogOpen(true);
   };
@@ -1017,7 +1029,8 @@ const Transactions = () => {
       isIncome: false,
       isRecurring: false,
       recurringFrequency: 'MONTHLY' as RecurringFrequency,
-      recurringInterval: 1
+      recurringInterval: 1,
+      recurringEndDate: ''
     });
   };
 
@@ -1073,6 +1086,7 @@ const Transactions = () => {
             frequency: createFormData.recurringFrequency,
             interval: createFormData.recurringInterval,
             startAt: createFormData.date,
+            endAt: createFormData.recurringEndDate || null,
             isIncome: createFormData.isIncome,
             accountId: accountId,
           },
@@ -1772,6 +1786,16 @@ const Transactions = () => {
                       slotProps={{ htmlInput: { min: 1 } }}
                       helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
                     />
+                  
+                  <TextField
+                    label="End Date (Optional)"
+                    type="date"
+                    value={editFormData.recurringEndDate}
+                    onChange={(e) => setEditFormData({ ...editFormData, recurringEndDate: e.target.value })}
+                    fullWidth
+                    sx={{ mt: 2 }}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
                 </>
               )}
             </Box>
@@ -2001,6 +2025,16 @@ const Transactions = () => {
                       slotProps={{ htmlInput: { min: '1', max: '12' } }}
                       helperText={`Every ${createFormData.recurringInterval} ${createFormData.recurringInterval === 1 ? createFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : createFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
                     />
+
+                  <TextField
+                    label="End Date (Optional)"
+                    type="date"
+                    value={createFormData.recurringEndDate}
+                    onChange={(e) => setCreateFormData({ ...createFormData, recurringEndDate: e.target.value })}
+                    fullWidth
+                    sx={{ mt: 2 }}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
                 </>
               )}
             </Box>

@@ -289,6 +289,7 @@ export const createTransactionNeon = async (
     isIncome: boolean;
     accountId: number;
     recurringTransactionId?: number;
+    userId?: string; // Optional userId to preserve original owner
   },
   accessToken: string,
 ): Promise<Transaction> => {
@@ -311,11 +312,18 @@ export const createTransactionNeon = async (
     insertData.RecurringTransactionId = transaction.recurringTransactionId;
   }
 
+  // If userId is provided, set it explicitly (for preserving original owner)
+  if (transaction.userId) {
+    insertData.UserId = transaction.userId;
+  }
+
   // Insert with category join to get full transaction object back
   const { data, error } = await pg
     .from("Transactions")
     .insert(insertData)
-    .select("*, Categories(CategoryId, Name, Type)");
+    .select(
+      "TransactionId, Date, Note, Amount, CategoryId, RecurringTransactionId, AccountId, UserId, Categories(CategoryId, Name, Type)",
+    );
 
   if (error) {
     throw new Error(error.message || "Failed to create transaction");
