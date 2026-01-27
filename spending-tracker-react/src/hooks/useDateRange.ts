@@ -37,7 +37,7 @@ export interface DateRangeActions {
 }
 
 export const useDateRange = (
-  options: UseDateRangeOptions = {}
+  options: UseDateRangeOptions = {},
 ): DateRangeState & DateRangeActions => {
   const {
     storageKey = "default",
@@ -114,7 +114,7 @@ export const useDateRange = (
       // If no access token, return current date
       if (!accessToken) {
         console.warn(
-          "No access token provided for fetching earliest transaction date"
+          "No access token provided for fetching earliest transaction date",
         );
         return new Date();
       }
@@ -131,7 +131,7 @@ export const useDateRange = (
           const transactionDate = new Date(transaction.date);
           return transactionDate < earliest ? transactionDate : earliest;
         },
-        new Date(transactions[0].date)
+        new Date(transactions[0].date),
       );
 
       return earliestDate;
@@ -148,7 +148,7 @@ export const useDateRange = (
       // If no access token, return current date
       if (!accessToken) {
         console.warn(
-          "No access token provided for fetching earliest net worth date"
+          "No access token provided for fetching earliest net worth date",
         );
         return new Date();
       }
@@ -165,14 +165,14 @@ export const useDateRange = (
           const snapshotDate = new Date(snapshot.date);
           return snapshotDate < earliest ? snapshotDate : earliest;
         },
-        new Date(snapshots[0].date)
+        new Date(snapshots[0].date),
       );
 
       return earliestDate;
     } catch (error) {
       console.error(
         "Failed to fetch net worth snapshots for earliest date:",
-        error
+        error,
       );
       // Fallback to current date if there's an error
       return new Date();
@@ -189,7 +189,7 @@ export const useDateRange = (
   };
 
   const getDateRangeForSelection = async (
-    selection: string
+    selection: string,
   ): Promise<{ start?: Date; end?: Date }> => {
     const now = new Date();
     switch (selection) {
@@ -228,6 +228,23 @@ export const useDateRange = (
     }
   }, [endDate, storageKey]);
 
+  // Update dates on mount if using a preset range
+  useEffect(() => {
+    const updateDatesForPreset = async () => {
+      // Only update if using a preset range (not 'all')
+      if (dateRange !== "all") {
+        const { start, end } = await getDateRangeForSelection(dateRange);
+        if (start && end) {
+          setStartDateState(start);
+          setEndDateState(end);
+        }
+      }
+    };
+
+    updateDatesForPreset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
   const setDateRange = async (value: string): Promise<void> => {
     setIsLoading(true);
     try {
@@ -263,7 +280,7 @@ export const useDateRange = (
     if (startDate && endDate) {
       return `${format(startDate, "MMM d, yyyy")} - ${format(
         endDate,
-        "MMM d, yyyy"
+        "MMM d, yyyy",
       )}`;
     }
 

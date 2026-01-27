@@ -156,6 +156,10 @@ const Transactions = () => {
   const [deleteRecurringDialogOpen, setDeleteRecurringDialogOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
 
+  // Edit virtual transaction dialog state
+  const [editVirtualDialogOpen, setEditVirtualDialogOpen] = useState(false);
+  const [virtualTransactionToEdit, setVirtualTransactionToEdit] = useState<Transaction | null>(null);
+
   // Expanded parent categories in dropdowns
   const [expandedParentsCreate, setExpandedParentsCreate] = useState<Set<string>>(new Set());
   const [expandedParentsEdit, setExpandedParentsEdit] = useState<Set<string>>(new Set());
@@ -538,6 +542,13 @@ const Transactions = () => {
   };
 
   const handleEditClick = async (transaction: Transaction) => {
+    // Check if this is a virtual transaction
+    if (transaction.isVirtual) {
+      setVirtualTransactionToEdit(transaction);
+      setEditVirtualDialogOpen(true);
+      return;
+    }
+
     setEditingTransaction(transaction);
     
     // If this is a recurring transaction, fetch its details
@@ -561,7 +572,7 @@ const Transactions = () => {
             isRecurring: true,
             recurringFrequency: recurring.frequency,
             recurringInterval: recurring.interval,
-            recurringIsActive: recurring.isActive
+            recurringIsActive: true // No longer using isActive field
           };
         }
       } catch (error) {
@@ -596,6 +607,114 @@ const Transactions = () => {
     });
   };
 
+  // Handle virtual transaction edit choice
+  const handleEditVirtualChoice = async (editType: 'this' | 'all') => {
+    if (!virtualTransactionToEdit) return;
+
+    setEditVirtualDialogOpen(false);
+
+    if (editType === 'all') {
+      // Edit the recurring transaction rule
+      if (!virtualTransactionToEdit.recurringTransactionId || !isAuthenticated) {
+        return;
+      }
+
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          throw new Error('No access token available');
+        }
+
+        const { getRecurringTransactionByIdNeon } = await import('../../services/recurringTransactionService');
+        const recurring = await getRecurringTransactionByIdNeon(
+          virtualTransactionToEdit.recurringTransactionId,
+          accessToken
+        );
+
+        // Open edit dialog with recurring transaction data
+        setEditingTransaction(virtualTransactionToEdit);
+        setEditFormData({
+          date: virtualTransactionToEdit.date.split('T')[0],
+          note: virtualTransactionToEdit.note,
+          amount: Math.abs(virtualTransactionToEdit.amount).toString(),
+          categoryId: virtualTransactionToEdit.category?.categoryId.toString() || '',
+          isIncome: virtualTransactionToEdit.isIncome,
+          isRecurring: true,
+          recurringFrequency: recurring.frequency,
+          recurringInterval: recurring.interval,
+          recurringIsActive: true
+        });
+        setEditDialogOpen(true);
+      } catch (error) {
+        setNotification({ 
+          message: 'Failed to load recurring transaction details', 
+          severity: 'error' 
+        });
+        console.error('Error loading recurring transaction:', error);
+      }
+    } else {
+      // Edit this instance only - materialize it first
+      if (!isAuthenticated) {
+        setNotification({ message: 'Please sign in to edit transactions', severity: 'error' });
+        return;
+      }
+
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          throw new Error('No access token available');
+        }
+
+        // Materialize the virtual transaction
+        const { createTransactionNeon } = await import('../../services/transactionService');
+        const materializedTransaction = await createTransactionNeon(
+          {
+            date: virtualTransactionToEdit.date,
+            note: virtualTransactionToEdit.note,
+            amount: Math.abs(virtualTransactionToEdit.amount),
+            categoryId: virtualTransactionToEdit.categoryId,
+            isIncome: virtualTransactionToEdit.isIncome,
+            accountId: virtualTransactionToEdit.accountId,
+            // Don't link to recurring transaction - this is now a one-time edit
+          },
+          accessToken
+        );
+
+        setNotification({ 
+          message: 'Virtual transaction materialized - you can now edit it', 
+          severity: 'success' 
+        });
+
+        // Reload transactions and open edit dialog for the materialized transaction
+        await loadTransactions();
+        
+        // Find the newly materialized transaction and open it for editing
+        setEditingTransaction(materializedTransaction);
+        setEditFormData({
+          date: materializedTransaction.date.split('T')[0],
+          note: materializedTransaction.note,
+          amount: Math.abs(materializedTransaction.amount).toString(),
+          categoryId: materializedTransaction.category?.categoryId.toString() || '',
+          isIncome: materializedTransaction.isIncome,
+          isRecurring: false,
+          recurringFrequency: 'MONTHLY' as RecurringFrequency,
+          recurringInterval: 1,
+          recurringIsActive: true
+        });
+        setEditDialogOpen(true);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setNotification({ 
+          message: 'Failed to materialize transaction: ' + errorMessage, 
+          severity: 'error' 
+        });
+        console.error('Error materializing transaction:', error);
+      }
+    }
+
+    setVirtualTransactionToEdit(null);
+  };
+
   const handleDeleteClick = async (transaction: Transaction) => {
     // Check if this is a recurring transaction
     if (transaction.recurringTransactionId) {
@@ -618,7 +737,7 @@ const Transactions = () => {
     setDeleteRecurringDialogOpen(false);
 
     if (deleteAllFuture && transactionToDelete.recurringTransactionId) {
-      // Delete all transactions linked to this recurring transaction and deactivate the rule
+      // Stop the recurring transaction by setting EndAt to now
       if (!isAuthenticated) {
         setError('Please sign in to delete transactions');
         return;
@@ -643,7 +762,7 @@ const Transactions = () => {
           throw new Error(deleteError.message || 'Failed to delete transactions');
         }
 
-        // Deactivate the recurring transaction rule
+        // Stop the recurring transaction rule by setting EndAt to now
         const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
         await deleteRecurringTransactionNeon(
           transactionToDelete.recurringTransactionId,
@@ -651,7 +770,7 @@ const Transactions = () => {
         );
 
         setNotification({ 
-          message: 'All recurring transactions deleted successfully', 
+          message: 'Recurring transaction stopped successfully', 
           severity: 'success' 
         });
         
@@ -662,10 +781,10 @@ const Transactions = () => {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         setNotification({ 
-          message: 'Failed to delete recurring transactions: ' + errorMessage, 
+          message: 'Failed to stop recurring transaction: ' + errorMessage, 
           severity: 'error' 
         });
-        console.error('Error deleting recurring transactions:', error);
+        console.error('Error stopping recurring transaction:', error);
         setTransactionToDelete(null);
         return;
       }
@@ -677,6 +796,12 @@ const Transactions = () => {
   };
 
   const deleteTransaction = async (transaction: Transaction) => {
+    // Virtual transactions don't exist in the database yet, so just refresh the list
+    if (transaction.isVirtual) {
+      setNotification({ message: 'Virtual transaction cannot be deleted - stop the recurring transaction instead', severity: 'error' });
+      return;
+    }
+
     if (!isAuthenticated) {
       setError('Please sign in to delete transactions');
       return;
@@ -693,7 +818,7 @@ const Transactions = () => {
       const { error: deleteError } = await pg
         .from('Transactions')
         .delete()
-        .eq('TransactionId', transaction.transactionId);
+        .eq('TransactionId', typeof transaction.transactionId === 'number' ? transaction.transactionId : parseInt(transaction.transactionId.toString()));
 
       if (deleteError) {
         throw new Error(deleteError.message || 'Failed to delete transaction');
@@ -731,8 +856,13 @@ const Transactions = () => {
       // Sign the amount based on whether it's income or expense
       const signedAmount = editFormData.isIncome ? Math.abs(amount) : -Math.abs(amount);
 
+      // Ensure we have a numeric transaction ID (not a virtual ID string)
+      const transactionId = typeof editingTransaction.transactionId === 'number' 
+        ? editingTransaction.transactionId 
+        : parseInt(editingTransaction.transactionId.toString());
+
       await updateTransactionNeon(
-        editingTransaction.transactionId,
+        transactionId,
         {
           date: editFormData.date,
           note: editFormData.note,
@@ -746,47 +876,18 @@ const Transactions = () => {
       if (editingTransaction.recurringTransactionId) {
         if (editFormData.isRecurring) {
           // Update recurring transaction properties
-          const { updateRecurringTransactionNeon, calculateNextRunAt } = await import('../../services/recurringTransactionService');
-          
-          // Calculate the next run date based on today's date if the calculated next run would be in the past
-          const today = new Date();
-          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-          
-          // Calculate what the next run should be from the transaction date
-          const nextRunAt = calculateNextRunAt(
-            editFormData.date + 'T12:00:00Z',
-            editFormData.recurringFrequency,
-            editFormData.recurringInterval
-          );
-          
-          // If the next run is in the past, keep calculating forward until we get a future date
-          let calculatedNextRunAt = nextRunAt;
-          let checkDate = editFormData.date;
-          const maxIterations = 1000; // Safety limit
-          let iterations = 0;
-          
-          while (calculatedNextRunAt.split('T')[0] <= todayStr && iterations < maxIterations) {
-            checkDate = calculatedNextRunAt.split('T')[0];
-            calculatedNextRunAt = calculateNextRunAt(
-              checkDate + 'T12:00:00Z',
-              editFormData.recurringFrequency,
-              editFormData.recurringInterval
-            );
-            iterations++;
-          }
+          const { updateRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
           
           await updateRecurringTransactionNeon(
             editingTransaction.recurringTransactionId,
             {
               frequency: editFormData.recurringFrequency,
               interval: editFormData.recurringInterval,
-              isActive: editFormData.recurringIsActive,
-              nextRunAt: calculatedNextRunAt
             },
             accessToken
           );
         } else {
-          // User turned off recurring - deactivate the recurring transaction and remove link
+          // User turned off recurring - stop the recurring transaction and remove link
           const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
           await deleteRecurringTransactionNeon(
             editingTransaction.recurringTransactionId,
@@ -839,8 +940,8 @@ const Transactions = () => {
         const maxBackfill = 100; // Safety limit
         
         // Calculate next occurrence after the initial transaction
-        const { calculateNextRunAt } = await import('../../services/recurringTransactionService');
-        nextDate = calculateNextRunAt(
+        const { calculateNextOccurrence } = await import('../../services/recurringTransactionService');
+        nextDate = calculateNextOccurrence(
           nextDate + 'T12:00:00Z',
           editFormData.recurringFrequency,
           editFormData.recurringInterval
@@ -862,7 +963,7 @@ const Transactions = () => {
           );
           
           backfilledCount++;
-          nextDate = calculateNextRunAt(
+          nextDate = calculateNextOccurrence(
             nextDate + 'T12:00:00Z',
             editFormData.recurringFrequency,
             editFormData.recurringInterval
@@ -994,8 +1095,8 @@ const Transactions = () => {
         const maxBackfill = 100; // Safety limit
         
         // Calculate next occurrence after the initial transaction
-        const { calculateNextRunAt } = await import('../../services/recurringTransactionService');
-        nextDate = calculateNextRunAt(
+        const { calculateNextOccurrence } = await import('../../services/recurringTransactionService');
+        nextDate = calculateNextOccurrence(
           nextDate + 'T12:00:00Z',
           createFormData.recurringFrequency,
           createFormData.recurringInterval
@@ -1017,7 +1118,7 @@ const Transactions = () => {
           );
           
           backfilledCount++;
-          nextDate = calculateNextRunAt(
+          nextDate = calculateNextOccurrence(
             nextDate + 'T12:00:00Z',
             createFormData.recurringFrequency,
             createFormData.recurringInterval
@@ -1166,6 +1267,17 @@ const Transactions = () => {
                     <MenuItem value="one-time">One-time Only</MenuItem>
                   </Select>
                 </FormControl>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showFutureOnly}
+                      onChange={(e) => setShowFutureOnly(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label="Show Future Transactions"
+                  sx={{ mx: 0 }}
+                />
                 <Button
                   variant="outlined"
                   onClick={() => { clearFilters(); setFilterAnchorEl(null); }}
@@ -1643,14 +1755,12 @@ const Transactions = () => {
                     >
                       <MenuItem value="DAILY">Daily</MenuItem>
                       <MenuItem value="WEEKLY">Weekly</MenuItem>
-                      <MenuItem value="BIWEEKLY">Biweekly (Every 2 weeks)</MenuItem>
                       <MenuItem value="MONTHLY">Monthly</MenuItem>
                       <MenuItem value="YEARLY">Yearly</MenuItem>
                     </Select>
                   </FormControl>
                   
-                  {editFormData.recurringFrequency !== 'BIWEEKLY' && (
-                    <TextField
+                  <TextField
                       label="Interval"
                       type="number"
                       value={editFormData.recurringInterval}
@@ -1662,7 +1772,6 @@ const Transactions = () => {
                       slotProps={{ htmlInput: { min: 1 } }}
                       helperText={`Every ${editFormData.recurringInterval} ${editFormData.recurringInterval === 1 ? editFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : editFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
                     />
-                  )}
                 </>
               )}
             </Box>
@@ -1675,6 +1784,39 @@ const Transactions = () => {
               disabled={isSaving}
             >
               {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Edit Virtual Transaction Dialog */}
+        <Dialog 
+          open={editVirtualDialogOpen} 
+          onClose={() => setEditVirtualDialogOpen(false)}
+          maxWidth="sm" 
+          fullWidth
+        >
+          <DialogTitle>Edit Recurring Transaction</DialogTitle>
+          <DialogContent>
+            <Typography>
+              This is a projected future transaction from a recurring rule. How would you like to edit it?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditVirtualDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => handleEditVirtualChoice('this')}
+              color="primary"
+            >
+              Edit This Instance Only
+            </Button>
+            <Button 
+              onClick={() => handleEditVirtualChoice('all')}
+              color="primary"
+              variant="contained"
+            >
+              Edit All Future Occurrences
             </Button>
           </DialogActions>
         </Dialog>
@@ -1707,7 +1849,7 @@ const Transactions = () => {
               color="error"
               variant="contained"
             >
-              Delete All Future
+              Stop Recurring
             </Button>
           </DialogActions>
         </Dialog>
@@ -1845,14 +1987,12 @@ const Transactions = () => {
                     >
                       <MenuItem value="DAILY">Daily</MenuItem>
                       <MenuItem value="WEEKLY">Weekly</MenuItem>
-                      <MenuItem value="BIWEEKLY">Biweekly (Every 2 weeks)</MenuItem>
                       <MenuItem value="MONTHLY">Monthly</MenuItem>
                       <MenuItem value="YEARLY">Yearly</MenuItem>
                     </Select>
                   </FormControl>
 
-                  {createFormData.recurringFrequency !== 'BIWEEKLY' && (
-                    <TextField
+                  <TextField
                       label="Interval"
                       type="number"
                       value={createFormData.recurringInterval}
@@ -1861,7 +2001,6 @@ const Transactions = () => {
                       slotProps={{ htmlInput: { min: '1', max: '12' } }}
                       helperText={`Every ${createFormData.recurringInterval} ${createFormData.recurringInterval === 1 ? createFormData.recurringFrequency.toLowerCase().replace(/ly$/, '').replace('dai', 'day') : createFormData.recurringFrequency.toLowerCase().replace(/ly$/, 's').replace('dai', 'day')}`}
                     />
-                  )}
                 </>
               )}
             </Box>

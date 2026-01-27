@@ -378,6 +378,23 @@ const Summary = () => {
     }
   };
 
+  // Update dates on mount if using a preset range
+  useEffect(() => {
+    const updateDatesForPreset = async () => {
+      // Only update if using a preset range (not 'all')
+      if (dateRange !== 'all') {
+        const { start, end } = await getDateRangeForSelection(dateRange);
+        if (start && end) {
+          setStartDate(start);
+          setEndDate(end);
+        }
+      }
+    };
+    
+    updateDatesForPreset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
   // Combined effect for data loading and localStorage persistence
   useEffect(() => {
     // Save dates to localStorage
