@@ -114,7 +114,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<NetWorthCategoryWithId | null>(null);
-  const [categoryFormData, setCategoryFormData] = useState<CreateNetWorthCategoryRequest>({
+  const [categoryFormData, setCategoryFormData] = useState<Omit<CreateNetWorthCategoryRequest, 'accountId'>>({
     name: '',
     isAsset: true,
     notes: ''
@@ -422,6 +422,11 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
         return;
       }
 
+      if (!userAccountId) {
+        setError('Account not loaded yet. Please try again.');
+        return;
+      }
+
       if (!categoryFormData.name.trim()) {
         setError('Category name is required');
         return;
@@ -438,7 +443,10 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
         const updated = await updateNetWorthCategoryNeon(accessToken, editingCategory.categoryId, categoryFormData);
         setCategories(categories.map(c => c.categoryId === updated.categoryId ? updated : c));
       } else {
-        const created = await createNetWorthCategoryNeon(accessToken, categoryFormData);
+        const created = await createNetWorthCategoryNeon(accessToken, {
+          ...categoryFormData,
+          accountId: userAccountId
+        });
         setCategories([...categories, created]);
       }
 

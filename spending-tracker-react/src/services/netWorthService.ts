@@ -67,7 +67,7 @@ export interface CreateNetWorthAssetRequest {
 export const getNetWorthSnapshotsNeon = async (
   accessToken: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<NetWorthSnapshot[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -96,7 +96,7 @@ export const getNetWorthSnapshotsNeon = async (
 // Get detailed snapshot with all accounts and values
 export const getNetWorthDetailNeon = async (
   accessToken: string,
-  snapshotId: number
+  snapshotId: number,
 ): Promise<NetWorthDetail> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -119,13 +119,13 @@ export const getNetWorthDetailNeon = async (
       NetWorthId,
       Value,
       NetWorthAccounts(AccountId, Name, IsAsset, NetWorthCategories(Name))
-    `
+    `,
     )
     .eq("SnapshotId", snapshotId);
 
   if (netWorthError) {
     throw new Error(
-      netWorthError.message || "Failed to fetch net worth details"
+      netWorthError.message || "Failed to fetch net worth details",
     );
   }
 
@@ -156,7 +156,7 @@ export const getNetWorthDetailNeon = async (
 // Get snapshot with categories summary
 export const getNetWorthCategorySummaryNeon = async (
   accessToken: string,
-  snapshotId: number
+  snapshotId: number,
 ): Promise<NetWorthCategorySummary> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -178,13 +178,13 @@ export const getNetWorthCategorySummaryNeon = async (
       `
       Value,
       NetWorthAccounts(AccountId, Name, IsAsset, NetWorthCategories(CategoryId, Name))
-    `
+    `,
     )
     .eq("SnapshotId", snapshotId);
 
   if (netWorthError) {
     throw new Error(
-      netWorthError.message || "Failed to fetch net worth snapshot"
+      netWorthError.message || "Failed to fetch net worth snapshot",
     );
   }
 
@@ -240,7 +240,7 @@ export const getNetWorthCategorySummaryNeon = async (
 // Create a new net worth snapshot with values
 export const createNetWorthSnapshotNeon = async (
   accessToken: string,
-  request: CreateNetWorthSnapshotRequest
+  request: CreateNetWorthSnapshotRequest,
 ): Promise<NetWorthSnapshot> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -286,7 +286,7 @@ export const createNetWorthSnapshotNeon = async (
         .delete()
         .eq("SnapshotId", snapshot.SnapshotId);
       throw new Error(
-        insertError.message || "Failed to create net worth entries"
+        insertError.message || "Failed to create net worth entries",
       );
     }
   }
@@ -301,7 +301,7 @@ export const createNetWorthSnapshotNeon = async (
 // Delete a net worth snapshot (cascade deletes its net worth entries)
 export const deleteNetWorthSnapshotNeon = async (
   accessToken: string,
-  snapshotId: number
+  snapshotId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -319,7 +319,7 @@ export const deleteNetWorthSnapshotNeon = async (
 export const getNetWorthSnapshotsWithValuesNeon = async (
   accessToken: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<(NetWorthSnapshot & { netWorth: number })[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -337,12 +337,12 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
 
   const { data: snapshots, error: snapshotError } = await snapshotQuery.order(
     "Date",
-    { ascending: true }
+    { ascending: true },
   );
 
   if (snapshotError) {
     throw new Error(
-      snapshotError.message || "Failed to fetch net worth snapshots"
+      snapshotError.message || "Failed to fetch net worth snapshots",
     );
   }
 
@@ -359,7 +359,7 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
       SnapshotId,
       Value,
       NetWorthAccountId
-    `
+    `,
     )
     .in("SnapshotId", snapshotIds);
 
@@ -395,7 +395,7 @@ export const getNetWorthSnapshotsWithValuesNeon = async (
     // So we just sum all values directly without any transformation
     netWorthBySnapshot.set(
       snapshotId,
-      (netWorthBySnapshot.get(snapshotId) || 0) + value
+      (netWorthBySnapshot.get(snapshotId) || 0) + value,
     );
   });
 
@@ -423,7 +423,7 @@ export interface SnapshotAccountValue {
 export const getNetWorthSnapshotsWithAccountValuesNeon = async (
   accessToken: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<SnapshotAccountValue[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -439,12 +439,12 @@ export const getNetWorthSnapshotsWithAccountValuesNeon = async (
 
   const { data: snapshots, error: snapshotError } = await snapshotQuery.order(
     "Date",
-    { ascending: true }
+    { ascending: true },
   );
 
   if (snapshotError) {
     throw new Error(
-      snapshotError.message || "Failed to fetch net worth snapshots"
+      snapshotError.message || "Failed to fetch net worth snapshots",
     );
   }
 
@@ -511,7 +511,7 @@ export const getNetWorthSnapshotsWithAccountValuesNeon = async (
 
 // OPTIMIZED: Get all unique accounts from all snapshots in one query
 export const getAllNetWorthAccountTemplatesNeon = async (
-  accessToken: string
+  accessToken: string,
 ): Promise<
   (Omit<CreateNetWorthAccountRequest, "accountId"> & {
     accountId?: number;
@@ -523,7 +523,7 @@ export const getAllNetWorthAccountTemplatesNeon = async (
   const { data, error } = await pg
     .from("NetWorthAccounts")
     .select(
-      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)"
+      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)",
     )
     .order("Name");
 
@@ -547,14 +547,14 @@ export interface NetWorthAccountWithId extends CreateNetWorthAccountRequest {
 }
 
 export const getAllNetWorthAccountsNeon = async (
-  accessToken: string
+  accessToken: string,
 ): Promise<NetWorthAccountWithId[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
   let query = pg
     .from("NetWorthAccounts")
     .select(
-      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)"
+      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)",
     )
     .order("Name");
 
@@ -576,7 +576,7 @@ export const getAllNetWorthAccountsNeon = async (
 // Create a new net worth account
 export const createNetWorthAccountNeon = async (
   accessToken: string,
-  request: CreateNetWorthAccountRequest
+  request: CreateNetWorthAccountRequest,
 ): Promise<NetWorthAccountWithId> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -590,7 +590,7 @@ export const createNetWorthAccountNeon = async (
 
   if (categoryError || !categoryData) {
     throw new Error(
-      `Category "${request.category}" not found. Please create the category first.`
+      `Category "${request.category}" not found. Please create the category first.`,
     );
   }
 
@@ -628,7 +628,7 @@ export const createNetWorthAccountNeon = async (
 export const updateNetWorthAccountNeon = async (
   accessToken: string,
   accountId: number,
-  request: Partial<CreateNetWorthAccountRequest>
+  request: Partial<CreateNetWorthAccountRequest>,
 ): Promise<NetWorthAccountWithId> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -647,7 +647,7 @@ export const updateNetWorthAccountNeon = async (
 
     if (categoryError || !categoryData) {
       throw new Error(
-        `Category "${request.category}" not found. Please create the category first.`
+        `Category "${request.category}" not found. Please create the category first.`,
       );
     }
     updateData.NetWorthCategoryId = categoryData.CategoryId;
@@ -658,7 +658,7 @@ export const updateNetWorthAccountNeon = async (
     .update(updateData)
     .eq("NetWorthAccountId", accountId)
     .select(
-      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)"
+      "NetWorthAccountId, Name, IsAsset, IsArchived, NetWorthCategories(Name)",
     )
     .single();
 
@@ -682,7 +682,7 @@ export const updateNetWorthAccountNeon = async (
 // Archive a net worth account (soft delete - hides from view but preserves data)
 export const archiveNetWorthAccountNeon = async (
   accessToken: string,
-  accountId: number
+  accountId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -699,7 +699,7 @@ export const archiveNetWorthAccountNeon = async (
 // Unarchive a net worth account
 export const unarchiveNetWorthAccountNeon = async (
   accessToken: string,
-  accountId: number
+  accountId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -716,7 +716,7 @@ export const unarchiveNetWorthAccountNeon = async (
 // Delete a net worth account (hard delete - removes all data)
 export const deleteNetWorthAccountNeon = async (
   accessToken: string,
-  accountId: number
+  accountId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -740,7 +740,7 @@ export const getAccountValuesOverTimeNeon = async (
   accessToken: string,
   accountId: number,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
 ): Promise<AccountTimeSeries[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -762,7 +762,7 @@ export const getAccountValuesOverTimeNeon = async (
 
   if (error) {
     throw new Error(
-      error.message || "Failed to fetch account values over time"
+      error.message || "Failed to fetch account values over time",
     );
   }
 
@@ -788,11 +788,12 @@ export interface CreateNetWorthCategoryRequest {
   isAsset: boolean;
   sortOrder?: number;
   notes?: string;
+  accountId: number;
 }
 
 // Get all NetWorth categories
 export const getAllNetWorthCategoriesNeon = async (
-  accessToken: string
+  accessToken: string,
 ): Promise<NetWorthCategoryWithId[]> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -819,7 +820,7 @@ export const getAllNetWorthCategoriesNeon = async (
 // Create a new NetWorth category
 export const createNetWorthCategoryNeon = async (
   accessToken: string,
-  request: CreateNetWorthCategoryRequest
+  request: CreateNetWorthCategoryRequest,
 ): Promise<NetWorthCategoryWithId> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -831,6 +832,7 @@ export const createNetWorthCategoryNeon = async (
         IsAsset: request.isAsset,
         SortOrder: request.sortOrder ?? 0,
         Notes: request.notes || "",
+        AccountId: request.accountId,
       },
     ])
     .select("CategoryId, Name, IsAsset, SortOrder, Notes")
@@ -854,7 +856,7 @@ export const createNetWorthCategoryNeon = async (
 export const updateNetWorthCategoryNeon = async (
   accessToken: string,
   categoryId: number,
-  request: Partial<CreateNetWorthCategoryRequest>
+  request: Partial<CreateNetWorthCategoryRequest>,
 ): Promise<NetWorthCategoryWithId> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -888,7 +890,7 @@ export const updateNetWorthCategoryNeon = async (
 // Archive a NetWorth category (soft delete)
 export const archiveNetWorthCategoryNeon = async (
   accessToken: string,
-  categoryId: number
+  categoryId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
@@ -905,7 +907,7 @@ export const archiveNetWorthCategoryNeon = async (
 // Delete a NetWorth category (hard delete)
 export const deleteNetWorthCategoryNeon = async (
   accessToken: string,
-  categoryId: number
+  categoryId: number,
 ): Promise<void> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
 
