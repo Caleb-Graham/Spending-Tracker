@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { startOfYear, subDays, format } from "date-fns";
+import { startOfYear, format } from "date-fns";
 import {
   getTransactionsNeon,
   getNetWorthSnapshotsNeon,
@@ -8,9 +8,9 @@ import {
 } from "../services";
 
 export const dateRangeOptions = [
+  { value: "thisMonth", label: "This Month" },
+  { value: "lastMonth", label: "Last Month" },
   { value: "ytd", label: "Year to Date" },
-  { value: "last90", label: "Last 90 Days" },
-  { value: "last30", label: "Last 30 Days" },
   { value: "lastYear", label: "Last Year" },
   { value: "all", label: "All Time" },
 ];
@@ -81,12 +81,12 @@ export const useDateRange = (
   function getInitialStartDate(range: string): Date | null {
     const now = new Date();
     switch (range) {
+      case "thisMonth":
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+      case "lastMonth":
+        return new Date(now.getFullYear(), now.getMonth() - 1, 1);
       case "ytd":
         return startOfYear(now);
-      case "last30":
-        return subDays(now, 30);
-      case "last90":
-        return subDays(now, 90);
       case "lastYear":
         return new Date(now.getFullYear() - 1, 0, 1);
       default:
@@ -97,10 +97,11 @@ export const useDateRange = (
   function getInitialEndDate(range: string): Date | null {
     const now = new Date();
     switch (range) {
+      case "thisMonth":
       case "ytd":
-      case "last30":
-      case "last90":
         return now;
+      case "lastMonth":
+        return new Date(now.getFullYear(), now.getMonth(), 0);
       case "lastYear":
         return new Date(now.getFullYear() - 1, 11, 31);
       default:
@@ -193,12 +194,21 @@ export const useDateRange = (
   ): Promise<{ start?: Date; end?: Date }> => {
     const now = new Date();
     switch (selection) {
+      case "thisMonth":
+        return {
+          start: new Date(now.getFullYear(), now.getMonth(), 1),
+          end: now,
+        };
+      case "lastMonth":
+        const lastMonthStart = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          1,
+        );
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { start: lastMonthStart, end: lastMonthEnd };
       case "ytd":
         return { start: startOfYear(now), end: now };
-      case "last30":
-        return { start: subDays(now, 30), end: now };
-      case "last90":
-        return { start: subDays(now, 90), end: now };
       case "lastYear":
         const lastYear = new Date(now.getFullYear() - 1, 0, 1);
         const endOfLastYear = new Date(now.getFullYear() - 1, 11, 31);
@@ -285,12 +295,12 @@ export const useDateRange = (
     }
 
     switch (dateRange) {
+      case "thisMonth":
+        return "This Month";
+      case "lastMonth":
+        return "Last Month";
       case "ytd":
         return "Year to Date";
-      case "last30":
-        return "Last 30 Days";
-      case "last90":
-        return "Last 90 Days";
       case "lastYear":
         return "Last Year";
       case "all":
