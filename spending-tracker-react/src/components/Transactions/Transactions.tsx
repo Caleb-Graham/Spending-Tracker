@@ -864,21 +864,24 @@ const Transactions = () => {
       // Sign the amount based on whether it's income or expense
       const signedAmount = editFormData.isIncome ? Math.abs(amount) : -Math.abs(amount);
 
-      // Ensure we have a numeric transaction ID (not a virtual ID string)
-      const transactionId = typeof editingTransaction.transactionId === 'number' 
-        ? editingTransaction.transactionId 
-        : parseInt(editingTransaction.transactionId.toString());
+      // Only update the real DB transaction if this isn't a virtual (future) transaction
+      if (!editingTransaction.isVirtual) {
+        // Ensure we have a numeric transaction ID (not a virtual ID string)
+        const transactionId = typeof editingTransaction.transactionId === 'number'
+          ? editingTransaction.transactionId
+          : parseInt(editingTransaction.transactionId.toString());
 
-      await updateTransactionNeon(
-        transactionId,
-        {
-          date: editFormData.date,
-          note: editFormData.note,
-          amount: editFormData.amount ? signedAmount : undefined,
-          categoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : null
-        },
-        accessToken
-      );
+        await updateTransactionNeon(
+          transactionId,
+          {
+            date: editFormData.date,
+            note: editFormData.note,
+            amount: editFormData.amount ? signedAmount : undefined,
+            categoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : null
+          },
+          accessToken
+        );
+      }
       
       // Handle recurring transaction changes
       if (editingTransaction.recurringTransactionId) {
@@ -889,6 +892,9 @@ const Transactions = () => {
           await updateRecurringTransactionNeon(
             editingTransaction.recurringTransactionId,
             {
+              amount: signedAmount,
+              note: editFormData.note,
+              categoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : undefined,
               frequency: editFormData.recurringFrequency,
               interval: editFormData.recurringInterval,
             },
