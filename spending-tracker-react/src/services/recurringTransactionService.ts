@@ -59,27 +59,70 @@ const transformRecurringTransaction = (row: any): RecurringTransaction => ({
     : null,
 });
 
+// Get the last day of a specific month
+const getLastDayOfMonth = (year: number, month: number): number => {
+  // month is 0-indexed (0 = January, 11 = December)
+  // Create date for the 1st of next month, then subtract 1 day
+  return new Date(year, month + 1, 0).getDate();
+};
+
 // Calculate the next occurrence date based on frequency and interval
+// originalDayOfMonth: the day from the very first startAt date (to preserve across calculations)
 export const calculateNextOccurrence = (
   startAt: string,
   frequency: RecurringFrequency,
   interval: number = 1,
+  originalDayOfMonth?: number,
 ): string => {
   const date = new Date(startAt);
 
   switch (frequency) {
     case "DAILY":
-      date.setDate(date.getDate() + interval);
+      date.setUTCDate(date.getUTCDate() + interval);
       break;
     case "WEEKLY":
-      date.setDate(date.getDate() + 7 * interval);
+      date.setUTCDate(date.getUTCDate() + 7 * interval);
       break;
-    case "MONTHLY":
-      date.setMonth(date.getMonth() + interval);
+    case "MONTHLY": {
+      // Use the preserved original day, or fall back to current day
+      const targetDayOfMonth = originalDayOfMonth ?? date.getUTCDate();
+      const originalYear = date.getUTCFullYear();
+      const originalMonth = date.getUTCMonth();
+
+      // Calculate the target year and month
+      const targetMonth = originalMonth + interval;
+      const targetYear = originalYear + Math.floor(targetMonth / 12);
+      const normalizedMonth = ((targetMonth % 12) + 12) % 12;
+
+      // Get the last day of the target month
+      const lastDayOfTargetMonth = getLastDayOfMonth(
+        targetYear,
+        normalizedMonth,
+      );
+
+      // Use the original day, or the last day of the month if it doesn't exist
+      const finalDay = Math.min(targetDayOfMonth, lastDayOfTargetMonth);
+
+      // Set the new date using UTC to avoid timezone issues
+      date.setUTCFullYear(targetYear, normalizedMonth, finalDay);
       break;
-    case "YEARLY":
-      date.setFullYear(date.getFullYear() + interval);
+    }
+    case "YEARLY": {
+      // Use the preserved original day, or fall back to current day
+      const targetDayOfMonth = originalDayOfMonth ?? date.getUTCDate();
+      const originalMonth = date.getUTCMonth();
+      const targetYear = date.getUTCFullYear() + interval;
+
+      // Get the last day of the target month (handles leap year for Feb 29th)
+      const lastDayOfTargetMonth = getLastDayOfMonth(targetYear, originalMonth);
+
+      // Use the original day, or the last day of the month if it doesn't exist
+      const finalDay = Math.min(targetDayOfMonth, lastDayOfTargetMonth);
+
+      // Set the new date using UTC to avoid timezone issues
+      date.setUTCFullYear(targetYear, originalMonth, finalDay);
       break;
+    }
   }
 
   return date.toISOString();
@@ -97,6 +140,10 @@ export const generateVirtualTransactions = (
   // Start from the recurring transaction's StartAt date
   let currentDate = new Date(recurringTx.startAt);
 
+  // Preserve the original day-of-month from the startAt date using UTC to avoid timezone issues
+  // This ensures Jan 31 → Feb 28 → Mar 31 (not Mar 28)
+  const originalDayOfMonth = currentDate.getUTCDate();
+
   // Find the next occurrence that is AFTER the startDate
   // We need to advance from StartAt until we get a date > startDate
   while (currentDate <= startDate) {
@@ -104,6 +151,7 @@ export const generateVirtualTransactions = (
       currentDate.toISOString(),
       recurringTx.frequency,
       recurringTx.interval,
+      originalDayOfMonth,
     );
     currentDate = new Date(nextDateStr);
   }
@@ -142,6 +190,7 @@ export const generateVirtualTransactions = (
       currentDate.toISOString(),
       recurringTx.frequency,
       recurringTx.interval,
+      originalDayOfMonth,
     );
     currentDate = new Date(nextDateStr);
     occurrenceCount++;

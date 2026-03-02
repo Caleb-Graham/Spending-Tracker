@@ -949,12 +949,16 @@ const Transactions = () => {
         let backfilledCount = 0;
         const maxBackfill = 100; // Safety limit
         
+        // Extract original day of month for recurring calculations using UTC to avoid timezone issues
+        const originalDayOfMonth = new Date(editFormData.date + 'T12:00:00Z').getUTCDate();
+        
         // Calculate next occurrence after the initial transaction
         const { calculateNextOccurrence } = await import('../../services/recurringTransactionService');
         nextDate = calculateNextOccurrence(
           nextDate + 'T12:00:00Z',
           editFormData.recurringFrequency,
-          editFormData.recurringInterval
+          editFormData.recurringInterval,
+          originalDayOfMonth
         ).split('T')[0];
         
         // Create transactions for each occurrence up to today
@@ -977,7 +981,8 @@ const Transactions = () => {
           nextDate = calculateNextOccurrence(
             nextDate + 'T12:00:00Z',
             editFormData.recurringFrequency,
-            editFormData.recurringInterval
+            editFormData.recurringInterval,
+            originalDayOfMonth
           ).split('T')[0];
         }
 
@@ -1108,12 +1113,16 @@ const Transactions = () => {
         let backfilledCount = 0;
         const maxBackfill = 100; // Safety limit
         
+        // Extract original day of month for recurring calculations using UTC to avoid timezone issues
+        const originalDayOfMonth = new Date(createFormData.date + 'T12:00:00Z').getUTCDate();
+        
         // Calculate next occurrence after the initial transaction
         const { calculateNextOccurrence } = await import('../../services/recurringTransactionService');
         nextDate = calculateNextOccurrence(
           nextDate + 'T12:00:00Z',
           createFormData.recurringFrequency,
-          createFormData.recurringInterval
+          createFormData.recurringInterval,
+          originalDayOfMonth
         ).split('T')[0];
         
         // Create transactions for each occurrence up to today
@@ -1135,7 +1144,8 @@ const Transactions = () => {
           nextDate = calculateNextOccurrence(
             nextDate + 'T12:00:00Z',
             createFormData.recurringFrequency,
-            createFormData.recurringInterval
+            createFormData.recurringInterval,
+            originalDayOfMonth
           ).split('T')[0];
         }
 

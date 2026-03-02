@@ -108,6 +108,7 @@ const materializePastVirtualTransactions = async (
     CategoryId: number;
     RecurringTransactionId: number;
     AccountId: number;
+    UserId: string;
   }> = [];
 
   for (const recurringTx of recurringTxs) {
@@ -128,6 +129,7 @@ const materializePastVirtualTransactions = async (
           CategoryId: vt.categoryId,
           RecurringTransactionId: vt.recurringTransactionId!,
           AccountId: vt.accountId,
+          UserId: vt.userId!, // Use the recurring transaction owner's userId
         });
         // Add to set to prevent duplicates within same batch
         existingKeys.add(key);
@@ -139,8 +141,6 @@ const materializePastVirtualTransactions = async (
   if (toInsert.length > 0) {
     const { error } = await pg.from("Transactions").insert(toInsert);
     if (error) {
-      console.error("Failed to materialize transactions:", error);
-      throw new Error(error.message || "Failed to materialize transactions");
     }
   }
 
@@ -209,10 +209,16 @@ export const getTransactionsNeon = async (
 
   // Generate virtual transactions for the future
   const today = new Date();
+  today.setHours(23, 59, 59, 999); // End of today
   const futureEndDate =
     options?.endDate || new Date(today.getFullYear() + 5, 11, 31);
+  // Start virtual transactions from tomorrow to avoid overlap with materialized ones
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
   const futureStartDate =
-    options?.startDate && options.startDate > today ? options.startDate : today;
+    options?.startDate && options.startDate > tomorrow
+      ? options.startDate
+      : tomorrow;
 
   // Build lookup set from real transactions for deduplication
   const realTxKeys = new Set<string>();
