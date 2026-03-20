@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../utils/auth';
-import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency, getUserInfoBatch, type UserInfo } from '../../services';
+import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, skipRecurringInstanceNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency, getUserInfoBatch, type UserInfo } from '../../services';
 import { getUserAccountId } from '../../utils/accountUtils';
 import { getLocalToday } from '../../utils/dateUtils';
 import {
@@ -739,13 +739,12 @@ const Transactions = () => {
     await deleteTransaction(transaction);
   };
 
-  const handleDeleteRecurringConfirm = async (deleteAllFuture: boolean) => {
+  const handleDeleteRecurringConfirm = async (mode: 'this' | 'future' | 'all') => {
     if (!transactionToDelete) return;
 
     setDeleteRecurringDialogOpen(false);
 
-    if (deleteAllFuture && transactionToDelete.recurringTransactionId) {
-      // Stop the recurring transaction by setting EndAt to now
+    if ((mode === 'all' || mode === 'future') && transactionToDelete.recurringTransactionId) {
       if (!isAuthenticated) {
         setError('Please sign in to delete transactions');
         return;
@@ -759,54 +758,91 @@ const Transactions = () => {
         }
 
         const pg = PostgrestClientFactory.createClient(accessToken);
-        
-        // Delete all transactions linked to this recurring transaction
-        const { error: deleteError } = await pg
-          .from('Transactions')
-          .delete()
-          .eq('RecurringTransactionId', transactionToDelete.recurringTransactionId);
 
-        if (deleteError) {
-          throw new Error(deleteError.message || 'Failed to delete transactions');
+        if (mode === 'all') {
+          // Delete all materialized transactions linked to this recurring rule
+          const { error: deleteError } = await pg
+            .from('Transactions')
+            .delete()
+            .eq('RecurringTransactionId', transactionToDelete.recurringTransactionId);
+
+          if (deleteError) throw new Error(deleteError.message || 'Failed to delete transactions');
+
+          // Delete the recurring rule entirely
+          const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+          await deleteRecurringTransactionNeon(
+            transactionToDelete.recurringTransactionId,
+            accessToken
+          );
+
+          setNotification({ message: 'All recurring transactions deleted', severity: 'success' });
+        } else {
+          // mode === 'future': delete this occurrence and all future ones
+          const instanceDate = transactionToDelete.date;
+
+          // Delete all materialized transactions from this date onwards
+          const { error: deleteError } = await pg
+            .from('Transactions')
+            .delete()
+            .eq('RecurringTransactionId', transactionToDelete.recurringTransactionId)
+            .gte('Date', instanceDate);
+
+          if (deleteError) throw new Error(deleteError.message || 'Failed to delete transactions');
+
+          // Set EndAt to one day before this occurrence to prevent future generation
+          const oneDayBefore = new Date(new Date(instanceDate).getTime() - 86400000).toISOString();
+          const { updateRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+          await updateRecurringTransactionNeon(
+            transactionToDelete.recurringTransactionId,
+            { endAt: oneDayBefore },
+            accessToken
+          );
+
+          setNotification({ message: 'This and all future occurrences deleted', severity: 'success' });
         }
 
-        // Stop the recurring transaction rule by setting EndAt to now
-        const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
-        await deleteRecurringTransactionNeon(
-          transactionToDelete.recurringTransactionId,
-          accessToken
-        );
-
-        setNotification({ 
-          message: 'Recurring transaction stopped successfully', 
-          severity: 'success' 
-        });
-        
-        // Reload transactions to update the list
         await loadTransactions();
         setTransactionToDelete(null);
         return;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         setNotification({ 
-          message: 'Failed to stop recurring transaction: ' + errorMessage, 
+          message: 'Failed to delete recurring transactions: ' + errorMessage, 
           severity: 'error' 
         });
-        console.error('Error stopping recurring transaction:', error);
+        console.error('Error deleting recurring transactions:', error);
         setTransactionToDelete(null);
         return;
       }
     }
 
-    // Delete only the current transaction
+    // mode === 'this': delete only this occurrence
     await deleteTransaction(transactionToDelete);
     setTransactionToDelete(null);
   };
 
   const deleteTransaction = async (transaction: Transaction) => {
-    // Virtual transactions don't exist in the database yet, so just refresh the list
-    if (transaction.isVirtual) {
-      setNotification({ message: 'Virtual transaction cannot be deleted - stop the recurring transaction instead', severity: 'error' });
+    // Virtual recurring transactions: skip this single occurrence
+    if (transaction.isVirtual && transaction.recurringTransactionId) {
+      if (!isAuthenticated) {
+        setError('Please sign in to delete transactions');
+        return;
+      }
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) throw new Error('No access token available');
+        await skipRecurringInstanceNeon(
+          transaction.recurringTransactionId,
+          transaction.date,
+          transaction.accountId,
+          accessToken,
+        );
+        setTransactions(transactions.filter(t => t.transactionId !== transaction.transactionId));
+        setNotification({ message: 'Recurring occurrence skipped', severity: 'success' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setNotification({ message: 'Failed to skip occurrence: ' + errorMessage, severity: 'error' });
+      }
       return;
     }
 
@@ -823,6 +859,7 @@ const Transactions = () => {
       }
 
       const pg = PostgrestClientFactory.createClient(accessToken);
+
       const { error: deleteError } = await pg
         .from('Transactions')
         .delete()
@@ -1832,31 +1869,36 @@ const Transactions = () => {
         <Dialog 
           open={editVirtualDialogOpen} 
           onClose={() => setEditVirtualDialogOpen(false)}
-          maxWidth="sm" 
+          maxWidth="xs" 
           fullWidth
+          PaperProps={{ sx: { borderRadius: 3 } }}
         >
-          <DialogTitle>Edit Recurring Transaction</DialogTitle>
-          <DialogContent>
-            <Typography>
-              This is a projected future transaction from a recurring rule. How would you like to edit it?
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setEditVirtualDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
+          <DialogTitle sx={{ pb: 1, fontWeight: 600 }}>Edit Recurring Transaction</DialogTitle>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pb: 2 }}>
+            <Button
               onClick={() => handleEditVirtualChoice('this')}
-              color="primary"
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
             >
-              Edit This Instance Only
+              This Occurrence
             </Button>
-            <Button 
+            <Button
               onClick={() => handleEditVirtualChoice('all')}
-              color="primary"
-              variant="contained"
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
             >
-              Edit All Future Occurrences
+              All Future Occurrences
+            </Button>
+          </DialogContent>
+          <DialogActions sx={{ justifyContent: 'center', pb: 2.5, pt: 0 }}>
+            <Button
+              onClick={() => setEditVirtualDialogOpen(false)}
+              size="small"
+              sx={{ color: 'text.secondary', textTransform: 'none' }}
+            >
+              Cancel
             </Button>
           </DialogActions>
         </Dialog>
@@ -1865,31 +1907,44 @@ const Transactions = () => {
         <Dialog 
           open={deleteRecurringDialogOpen} 
           onClose={() => setDeleteRecurringDialogOpen(false)}
-          maxWidth="sm" 
+          maxWidth="xs" 
           fullWidth
+          PaperProps={{ sx: { borderRadius: 3 } }}
         >
-          <DialogTitle>Delete Recurring Transaction</DialogTitle>
-          <DialogContent>
-            <Typography>
-              This transaction is part of a recurring series. Do you want to delete all future transactions as well?
-            </Typography>
+          <DialogTitle sx={{ pb: 1, fontWeight: 600 }}>Delete Recurring Transaction</DialogTitle>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pb: 2 }}>
+            <Button
+              onClick={() => handleDeleteRecurringConfirm('this')}
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
+            >
+              This Occurrence
+            </Button>
+            <Button
+              onClick={() => handleDeleteRecurringConfirm('future')}
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
+            >
+              This & Future Occurrences
+            </Button>
+            <Button
+              onClick={() => handleDeleteRecurringConfirm('all')}
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
+            >
+              All Occurrences
+            </Button>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteRecurringDialogOpen(false)}>
+          <DialogActions sx={{ justifyContent: 'center', pb: 2.5, pt: 0 }}>
+            <Button
+              onClick={() => setDeleteRecurringDialogOpen(false)}
+              size="small"
+              sx={{ color: 'text.secondary', textTransform: 'none' }}
+            >
               Cancel
-            </Button>
-            <Button 
-              onClick={() => handleDeleteRecurringConfirm(false)}
-              color="primary"
-            >
-              Delete This Only
-            </Button>
-            <Button 
-              onClick={() => handleDeleteRecurringConfirm(true)}
-              color="error"
-              variant="contained"
-            >
-              Stop Recurring
             </Button>
           </DialogActions>
         </Dialog>

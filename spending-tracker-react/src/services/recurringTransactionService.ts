@@ -168,7 +168,6 @@ export const generateVirtualTransactions = (
   let occurrenceCount = 0;
 
   while (currentDate <= effectiveEndDate && occurrenceCount < maxOccurrences) {
-    // Format date as YYYY-MM-DD for consistency
     const dateStr = currentDate.toISOString().split("T")[0];
 
     virtualTransactions.push({
