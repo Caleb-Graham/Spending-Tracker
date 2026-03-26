@@ -541,7 +541,18 @@ const Transactions = () => {
     });
   };
 
-
+  // Returns the set of ancestor category IDs needed to make a given leaf visible.
+  const getAncestorsForCategory = (categoryIdStr: string): Set<number> => {
+    const result = new Set<number>();
+    const id = parseInt(categoryIdStr, 10);
+    if (isNaN(id)) return result;
+    let current = categories.find(c => c.categoryId === id);
+    while (current?.parentCategoryId) {
+      result.add(current.parentCategoryId);
+      current = categories.find(c => c.categoryId === current!.parentCategoryId);
+    }
+    return result;
+  };
 
   const clearFilters = () => {
     setTypeFilter('all');
@@ -628,6 +639,7 @@ const Transactions = () => {
       isIncome: transaction.isIncome,
       ...recurringData
     });
+    setExpandedCatsEdit(getAncestorsForCategory(transaction.category?.categoryId.toString() || ''));
     setEditDialogOpen(true);
   };
 
@@ -687,6 +699,7 @@ const Transactions = () => {
           recurringEndDate: recurring.endAt ? recurring.endAt.split('T')[0] : '',
           recurringIsActive: true
         });
+        setExpandedCatsEdit(getAncestorsForCategory(virtualTransactionToEdit.category?.categoryId.toString() || ''));
         setEditDialogOpen(true);
       } catch (error) {
         setNotification({ 
@@ -746,6 +759,7 @@ const Transactions = () => {
           recurringEndDate: '',
           recurringIsActive: true
         });
+        setExpandedCatsEdit(getAncestorsForCategory(materializedTransaction.category?.categoryId.toString() || ''));
         setEditDialogOpen(true);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
