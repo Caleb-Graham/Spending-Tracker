@@ -36,7 +36,8 @@ import {
   useTheme,
   LinearProgress,
   Popover,
-  Badge
+  Badge,
+  Divider
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon, ExpandMore as ExpandMoreIcon, ChevronRight as ChevronRightIcon, KeyboardArrowLeft as ArrowLeftIcon, KeyboardArrowRight as ArrowRightIcon, FilterList as FilterListIcon, Search as SearchIcon, Close as CloseIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -1348,7 +1349,17 @@ const Transactions = () => {
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
               <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 200 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Filters</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Filters</Typography>
+                  <Button
+                    size="small"
+                    onClick={() => { clearFilters(); setFilterAnchorEl(null); }}
+                    disabled={getActiveFilterCount() === 0}
+                    sx={{ minWidth: 0, p: 0, fontSize: '0.75rem' }}
+                  >
+                    Clear Filters
+                  </Button>
+                </Box>
                 <FormControl fullWidth size="small">
                   <InputLabel>Type</InputLabel>
                   <Select
@@ -1379,11 +1390,31 @@ const Transactions = () => {
                     }}
                   >
                     <MenuItem value="all">All Categories</MenuItem>
-                    {renderCategoryMenuItems(
-                      getHierarchicalCategoryItems(),
+                    {typeFilter === 'income' && renderCategoryMenuItems(
+                      getHierarchicalCategoryItems('Income'),
                       expandedCatsFilter,
                       toggleExpandId(setExpandedCatsFilter)
                     )}
+                    {typeFilter === 'expense' && renderCategoryMenuItems(
+                      getHierarchicalCategoryItems('Expense'),
+                      expandedCatsFilter,
+                      toggleExpandId(setExpandedCatsFilter)
+                    )}
+                    {typeFilter === 'all' && [
+                      <MenuItem key="income-header" disabled sx={{ opacity: 1, fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'success.main', py: 0.5 }}>Income</MenuItem>,
+                      ...renderCategoryMenuItems(
+                        getHierarchicalCategoryItems('Income'),
+                        expandedCatsFilter,
+                        toggleExpandId(setExpandedCatsFilter)
+                      ),
+                      <Divider key="type-divider" sx={{ my: 0.5 }} />,
+                      <MenuItem key="expense-header" disabled sx={{ opacity: 1, fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'error.main', py: 0.5 }}>Expenses</MenuItem>,
+                      ...renderCategoryMenuItems(
+                        getHierarchicalCategoryItems('Expense'),
+                        expandedCatsFilter,
+                        toggleExpandId(setExpandedCatsFilter)
+                      ),
+                    ]}
                   </Select>
                 </FormControl>
                 <FormControl fullWidth size="small">
@@ -1425,15 +1456,6 @@ const Transactions = () => {
                   label="Show Future Transactions"
                   sx={{ mx: 0 }}
                 />
-                <Button
-                  variant="outlined"
-                  onClick={() => { clearFilters(); setFilterAnchorEl(null); }}
-                  disabled={getActiveFilterCount() === 0}
-                  size="small"
-                  fullWidth
-                >
-                  Clear Filters
-                </Button>
               </Box>
             </Popover>
             <Button
