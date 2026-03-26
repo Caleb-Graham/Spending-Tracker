@@ -646,15 +646,19 @@ const Summary = () => {
                       .filter(cat => cat.parentCategoryId)
                       .map(cat => Number(cat.categoryId))
                   );
+
+                  // Recursively map nodes, carrying children for drill-down
+                  const mapNode = (node: any): any => ({
+                    categoryId: node.categoryId,
+                    categoryName: node.categoryName,
+                    amount: node.amount,
+                    percentage: node.percentage,
+                    children: node.children?.length ? node.children.map(mapNode) : undefined,
+                  });
                   
                   return grouped
                     .filter(item => !childCategoryIds.has(Number(item.categoryId)))
-                    .map((parent: any) => ({
-                      categoryId: parent.categoryId,
-                      categoryName: parent.categoryName,
-                      amount: parent.amount,
-                      percentage: parent.percentage
-                    }));
+                    .map(mapNode);
                 })()} 
                 width={1000} 
                 height={900} 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3-selection';
 import 'd3-transition'; // Import for transition support
 import { pie, arc } from 'd3-shape';
@@ -10,6 +10,12 @@ interface PieData {
   categoryName: string;
   amount: number;
   percentage: number;
+  children?: PieData[];
+}
+
+interface DrillLevel {
+  data: PieData[];
+  label: string;
 }
 
 interface D3PieChartProps {
@@ -47,8 +53,55 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
 
+  const [drillStack, setDrillStack] = useState<DrillLevel[]>([]);
+  const [currentData, setCurrentData] = useState<PieData[]>(data);
+  const [currentLabel, setCurrentLabel] = useState('Total');
+  const [animPhase, setAnimPhase] = useState<'idle' | 'exit' | 'enter'>('idle');
+
+  // Reset drill state when top-level data changes (e.g. date range change)
   useEffect(() => {
-    if (!data || !data.length) return;
+    setCurrentData(data);
+    setDrillStack([]);
+    setCurrentLabel('Total');
+  }, [data]);
+
+  // Use a ref so the D3 click handler always has the latest drillIn fn
+  const drillInRef = useRef<(slice: PieData) => void>(() => {});
+
+  const drillIn = useCallback((slice: PieData) => {
+    if (!slice.children?.length) return;
+    const total = slice.children.reduce((s, c) => s + c.amount, 0);
+    const children: PieData[] = slice.children.map(c => ({
+      ...c,
+      percentage: total > 0 ? (c.amount / total) * 100 : 0,
+    }));
+    setAnimPhase('exit');
+    setTimeout(() => {
+      setDrillStack(prev => [...prev, { data: currentData, label: currentLabel }]);
+      setCurrentData(children);
+      setCurrentLabel(slice.categoryName);
+      setAnimPhase('enter');
+      requestAnimationFrame(() => requestAnimationFrame(() => setAnimPhase('idle')));
+    }, 220);
+  }, [currentData, currentLabel]);
+
+  useEffect(() => { drillInRef.current = drillIn; }, [drillIn]);
+
+  const drillOut = useCallback(() => {
+    if (!drillStack.length) return;
+    const prevLevel = drillStack[drillStack.length - 1];
+    setAnimPhase('exit');
+    setTimeout(() => {
+      setDrillStack(prev => prev.slice(0, -1));
+      setCurrentData(prevLevel.data);
+      setCurrentLabel(prevLevel.label);
+      setAnimPhase('enter');
+      requestAnimationFrame(() => requestAnimationFrame(() => setAnimPhase('idle')));
+    }, 220);
+  }, [drillStack]);
+
+  useEffect(() => {
+    if (!currentData || !currentData.length) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear previous render
@@ -61,7 +114,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
 
     // Color scale
     const color = scaleOrdinal<string>()
-      .domain(data.map(d => d.categoryName))
+      .domain(currentData.map(d => d.categoryName))
       .range(colorPalette);
 
     // Create the pie generator - sort by value descending
@@ -97,7 +150,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
     const chartG = svg.append("g")
       .attr("transform", `translate(${width / 2}, ${height / 2})`);
 
-    const pieData = pieGenerator(data);
+    const pieData = pieGenerator(currentData);
 
     // Add pie slices
     const slices = chartG.selectAll(".slice")
@@ -110,7 +163,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
       .attr("fill", d => color(d.data.categoryName))
       .attr("stroke", isDarkMode ? '#1e1e1e' : '#fff')
       .attr("stroke-width", 2)
-      .style("cursor", "pointer")
+      .style("cursor", d => (d.data.children?.length ? "pointer" : "default"))
       .style("opacity", 0.9)
       .on("mouseover", function(event, d: any) {
         // Highlight slice
@@ -121,6 +174,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
           .style("opacity", 1);
         
         // Show tooltip
+        const hasDrilldown = (d.data.children?.length ?? 0) > 0;
         const tooltip = d3.select("body").append("div")
           .attr("class", "d3-pie-tooltip")
           .style("position", "absolute")
@@ -147,6 +201,7 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
             <span style="opacity: 0.7;">Percentage</span>
             <span style="font-weight: 500;">${d.data.percentage.toFixed(1)}%</span>
           </div>
+          ${hasDrilldown ? `<div style="margin-top: 8px; opacity: 0.55; font-size: 11px;">Click to explore subcategories →</div>` : ''}
         `)
         .style("left", (event.pageX + 15) + "px")
         .style("top", (event.pageY - 15) + "px");
@@ -164,6 +219,10 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
           .style("opacity", 0.9);
         
         d3.selectAll(".d3-pie-tooltip").remove();
+      })
+      .on("click", function(_event, d: any) {
+        d3.selectAll(".d3-pie-tooltip").remove();
+        drillInRef.current(d.data);
       });
 
     // Add labels with leader lines for slices > 2%
@@ -218,16 +277,19 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
           .text(`${d.data.percentage.toFixed(1)}%`);
       });
 
-    // Center total
-    const totalAmount = data.reduce((sum, d) => sum + d.amount, 0);
-    
+    // Center label & total
+    const totalAmount = currentData.reduce((sum, d) => sum + d.amount, 0);
+    const centerLabelText = currentLabel.length > 14
+      ? currentLabel.substring(0, 12) + '…'
+      : currentLabel;
+
     chartG.append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "-0.4em")
       .attr("font-family", "'Inter', -apple-system, BlinkMacSystemFont, sans-serif")
       .attr("font-size", "16px")
       .attr("fill", isDarkMode ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)")
-      .text("Total");
+      .text(centerLabelText);
 
     chartG.append("text")
       .attr("text-anchor", "middle")
@@ -238,7 +300,14 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
       .attr("fill", isDarkMode ? "#fff" : "#333")
       .text(`$${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
 
-  }, [data, width, height, isDarkMode]);
+  }, [currentData, currentLabel, width, height, isDarkMode]);
+
+  // Animate wrapper: exit fades out, enter is instant-reset to 0, idle fades in
+  const wrapperStyle: React.CSSProperties = animPhase === 'exit'
+    ? { opacity: 0, transform: 'scale(0.94)', transition: 'opacity 220ms ease, transform 220ms ease' }
+    : animPhase === 'enter'
+    ? { opacity: 0, transform: 'scale(1.03)', transition: 'none' }
+    : { opacity: 1, transform: 'scale(1)', transition: 'opacity 300ms ease, transform 300ms ease' };
 
   if (!data || !data.length) {
     return (
@@ -255,9 +324,60 @@ const D3PieChart: React.FC<D3PieChartProps> = ({
     );
   }
 
+  const breadcrumbs = [...drillStack.map(l => l.label), currentLabel];
+
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-      <svg ref={svgRef}></svg>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+      {/* Breadcrumb nav — only shown when drilled in */}
+      {drillStack.length > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 16,
+          alignSelf: 'flex-start',
+          paddingLeft: 8,
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+          fontSize: '13px',
+          color: isDarkMode ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)',
+        }}>
+          <button
+            onClick={drillOut}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer',
+              padding: '4px 10px',
+              color: isDarkMode ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.75)',
+              fontSize: '13px',
+              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+              transition: 'background 150ms ease',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.11)')}
+            onMouseLeave={e => (e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)')}
+          >
+            ← Back
+          </button>
+          {breadcrumbs.map((label, i) => (
+            <React.Fragment key={i}>
+              {i > 0 && <span style={{ opacity: 0.35 }}>/</span>}
+              <span style={{
+                opacity: i < breadcrumbs.length - 1 ? 0.5 : 1,
+                fontWeight: i === breadcrumbs.length - 1 ? 500 : 400,
+              }}>
+                {label}
+              </span>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+      <div style={wrapperStyle}>
+        <svg ref={svgRef}></svg>
+      </div>
     </div>
   );
 };
