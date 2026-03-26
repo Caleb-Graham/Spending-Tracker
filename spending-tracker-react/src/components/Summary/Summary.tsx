@@ -23,14 +23,11 @@ import {
   useTheme
 } from '@mui/material';
 import { ExpandMore, ExpandLess } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { startOfYear, subDays, startOfMonth } from 'date-fns';
+import { useDateRange } from '../../hooks/useDateRange';
+import DateRangeSelector from '../shared/DateRangeSelector';
 import { 
   getAllCategoriesNeon, 
   getDetailedCategorySummariesNeon, 
-  getTransactionsNeon,
   type Category, 
   type DetailedCategorySummary
 } from '../../services';
@@ -38,65 +35,15 @@ import SankeyDiagram from './SankeyDiagram/SankeyDiagram';
 import D3PieChart from './PieChart/D3PieChart';
 import './Summary.css';
 
-const dateRangeOptions = [
-  { value: 'thisMonth', label: 'This Month' },
-  { value: 'ytd', label: 'Year to Date' },
-  { value: 'last90', label: 'Last 90 Days' },
-  { value: 'lastYear', label: 'Last Year' },
-  { value: 'all', label: 'All Time' },
-];
-
 const Summary = () => {
   const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
-  // Load date range from localStorage or default to 'ytd'
-  const [dateRange, setDateRange] = useState(() => {
-    const saved = localStorage.getItem('summary-date-range');
-    return saved || 'ytd';
+  const dateRangeState = useDateRange({
+    storageKey: 'summary',
+    defaultRange: 'ytd',
+    dataSource: 'transactions',
   });
-  
-  // Load custom date range from localStorage  
-  const [startDate, setStartDate] = useState<Date | null>(() => {
-    const saved = localStorage.getItem('summary-start-date');
-    if (saved) {
-      return new Date(saved);
-    }
-    // If no saved date, initialize based on current dateRange
-    const savedRange = localStorage.getItem('summary-date-range') || 'ytd';
-    const now = new Date();
-    switch (savedRange) {
-      case 'thisMonth':
-        return startOfMonth(now);
-      case 'ytd':
-        return startOfYear(now);
-      case 'last90':
-        return subDays(now, 90);
-      case 'lastYear':
-        return new Date(now.getFullYear() - 1, 0, 1);
-      default:
-        return null;
-    }
-  });
-  
-  const [endDate, setEndDate] = useState<Date | null>(() => {
-    const saved = localStorage.getItem('summary-end-date');
-    if (saved) {
-      return new Date(saved);
-    }
-    // If no saved date, initialize based on current dateRange
-    const savedRange = localStorage.getItem('summary-date-range') || 'ytd';
-    const now = new Date();
-    switch (savedRange) {
-      case 'thisMonth':
-      case 'ytd':
-      case 'last90':
-        return now;
-      case 'lastYear':
-        return new Date(now.getFullYear() - 1, 11, 31);
-      default:
-        return null;
-    }
-  });
+  const { startDate, endDate } = dateRangeState;
   const [detailedCategorySummary, setDetailedCategorySummary] = useState<{
     income: DetailedCategorySummary[];
     expenses: DetailedCategorySummary[];
@@ -111,7 +58,6 @@ const Summary = () => {
   });
   const [expandedParents, setExpandedParents] = useState<Set<number>>(new Set());
   const loadingRef = useRef(false);
-  const earliestDateCache = useRef<Date | null>(null);
 
   // Helper function to group categories by parent with full nested hierarchy
   const groupByParent = (categories: any[]) => {
@@ -269,46 +215,6 @@ const Summary = () => {
     setExpandedParents(new Set());
   };
 
-  // Function to get the earliest transaction date
-  const getEarliestTransactionDate = async (): Promise<Date> => {
-    // Return cached value if available
-    if (earliestDateCache.current) {
-      return earliestDateCache.current;
-    }
-
-    if (!isAuthenticated) {
-      return new Date();
-    }
-
-    try {
-      const accessToken = await getAccessToken();
-
-      if (!accessToken) {
-        return new Date();
-      }
-
-      const transactions = await getTransactionsNeon(accessToken);
-      if (transactions.length === 0) {
-        // If no transactions, default to current date
-        return new Date();
-      }
-      
-      // Find the earliest transaction date
-      const earliestDate = transactions.reduce((earliest: Date, transaction) => {
-        const transactionDate = new Date(transaction.date);
-        return transactionDate < earliest ? transactionDate : earliest;
-      }, new Date(transactions[0].date));
-      
-      // Cache the result
-      earliestDateCache.current = earliestDate;
-      return earliestDate;
-    } catch (error) {
-      console.error('Failed to fetch transactions for earliest date:', error);
-      // Fallback to current date if there's an error
-      return new Date();
-    }
-  };
-
   const loadCategorySummary = async (startDate?: Date, endDate?: Date) => {
     if (!isAuthenticated) {
       setError('Please sign in to view summary');
@@ -354,92 +260,10 @@ const Summary = () => {
     }
   };
 
-  const getDateRangeForSelection = async (selection: string): Promise<{ start?: Date, end?: Date }> => {
-    const now = new Date();
-    switch (selection) {
-      case 'thisMonth':
-        return { start: startOfMonth(now), end: now };
-      case 'ytd':
-        return { start: startOfYear(now), end: now };
-      case 'last90':
-        return { start: subDays(now, 90), end: now };
-      case 'lastYear':
-        const lastYear = new Date(now.getFullYear() - 1, 0, 1);
-        const endOfLastYear = new Date(now.getFullYear() - 1, 11, 31);
-        return { start: lastYear, end: endOfLastYear };
-      case 'all':
-        const earliestDate = await getEarliestTransactionDate();
-        return { start: earliestDate, end: now };
-      default:
-        return {};
-    }
-  };
-
-  // Update dates on mount if using a preset range
   useEffect(() => {
-    const updateDatesForPreset = async () => {
-      // Only update if using a preset range (not 'all')
-      if (dateRange !== 'all') {
-        const { start, end } = await getDateRangeForSelection(dateRange);
-        if (start && end) {
-          setStartDate(start);
-          setEndDate(end);
-        }
-      }
-    };
-    
-    updateDatesForPreset();
+    loadCategorySummary(startDate || undefined, endDate || undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
-
-  // Combined effect for data loading and localStorage persistence
-  useEffect(() => {
-    // Save dates to localStorage
-    if (startDate) {
-      localStorage.setItem('summary-start-date', startDate.toISOString());
-    } else {
-      localStorage.removeItem('summary-start-date');
-    }
-    
-    if (endDate) {
-      localStorage.setItem('summary-end-date', endDate.toISOString());
-    } else {
-      localStorage.removeItem('summary-end-date');
-    }
-
-    // Load data based on current date selection
-    const loadData = async () => {
-      if (startDate && endDate) {
-        await loadCategorySummary(startDate, endDate);
-      } else {
-        const { start, end } = await getDateRangeForSelection(dateRange);
-        await loadCategorySummary(start, end);
-      }
-    };
-    
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, startDate?.toISOString(), endDate?.toISOString(), isAuthenticated]);
-
-  const handleDateRangeChange = async (event: any) => {
-    const value = event.target.value;
-    setDateRange(value);
-    
-    // Save to localStorage
-    localStorage.setItem('summary-date-range', value);
-    
-    // Auto-populate the date inputs based on the selection
-    const { start, end } = await getDateRangeForSelection(value);
-    if (start && end) {
-      setStartDate(start);
-      setEndDate(end);
-    } else if (value === 'all') {
-      // For "All Time", the function should return start and end dates now
-      // But if for some reason it doesn't, clear them
-      setStartDate(null);
-      setEndDate(null);
-    }
-  };
+  }, [startDate, endDate, isAuthenticated]);
 
   // Transform data for Sankey diagram
   const getSankeyData = () => {
@@ -572,49 +396,7 @@ const Summary = () => {
         
         {/* Filter Controls Row */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="date-range-label">Date Range</InputLabel>
-            <Select
-              labelId="date-range-label"
-              id="date-range"
-              value={dateRange}
-              label="Date Range"
-              onChange={handleDateRangeChange}
-              size="small"
-            >
-              {dateRangeOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <DatePicker
-              label="Start Date"
-              value={startDate}
-              onChange={(newValue) => setStartDate(newValue)}
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: { minWidth: '140px' }
-                }
-              }}
-            />
-            <DatePicker
-              label="End Date"
-              value={endDate}
-              onChange={(newValue) => setEndDate(newValue)}
-              minDate={startDate || undefined}
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: { minWidth: '140px' }
-                }
-              }}
-            />
-          </LocalizationProvider>
+          <DateRangeSelector {...dateRangeState} size="small" />
 
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="view-label">View</InputLabel>
