@@ -35,6 +35,12 @@ function getInitialStartDate(range: string): Date | null {
       return startOfYear(now);
     case "lastYear":
       return new Date(now.getFullYear() - 1, 0, 1);
+    case "last3Months":
+      return new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    case "last6Months":
+      return new Date(now.getFullYear(), now.getMonth() - 6, 1);
+    case "last12Months":
+      return new Date(now.getFullYear(), now.getMonth() - 12, 1);
     default:
       return null;
   }
@@ -45,6 +51,9 @@ function getInitialEndDate(range: string): Date | null {
   switch (range) {
     case "thisMonth":
     case "ytd":
+    case "last3Months":
+    case "last6Months":
+    case "last12Months":
       return now;
     case "lastMonth":
       return new Date(now.getFullYear(), now.getMonth(), 0);
@@ -58,6 +67,15 @@ function getInitialEndDate(range: string): Date | null {
 export const dateRangeOptions = [
   { value: "thisMonth", label: "This Month" },
   { value: "lastMonth", label: "Last Month" },
+  { value: "ytd", label: "Year to Date" },
+  { value: "lastYear", label: "Last Year" },
+  { value: "all", label: "All Time" },
+];
+
+export const netWorthDateRangeOptions = [
+  { value: "last3Months", label: "Last 3 Months" },
+  { value: "last6Months", label: "Last 6 Months" },
+  { value: "last12Months", label: "Last 12 Months" },
   { value: "ytd", label: "Year to Date" },
   { value: "lastYear", label: "Last Year" },
   { value: "all", label: "All Time" },
@@ -220,6 +238,21 @@ export const useDateRange = (
         );
         const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
         return { start: lastMonthStart, end: lastMonthEnd };
+      case "last3Months":
+        return {
+          start: new Date(now.getFullYear(), now.getMonth() - 3, 1),
+          end: now,
+        };
+      case "last6Months":
+        return {
+          start: new Date(now.getFullYear(), now.getMonth() - 6, 1),
+          end: now,
+        };
+      case "last12Months":
+        return {
+          start: new Date(now.getFullYear(), now.getMonth() - 12, 1),
+          end: now,
+        };
       case "ytd":
         return { start: startOfYear(now), end: now };
       case "lastYear":
@@ -321,6 +354,12 @@ export const useDateRange = (
         return "This Month";
       case "lastMonth":
         return "Last Month";
+      case "last3Months":
+        return "Last 3 Months";
+      case "last6Months":
+        return "Last 6 Months";
+      case "last12Months":
+        return "Last 12 Months";
       case "ytd":
         return "Year to Date";
       case "lastYear":

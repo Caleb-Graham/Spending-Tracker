@@ -46,7 +46,7 @@ import {
   type CreateNetWorthAssetRequest,
   type SnapshotAccountValue
 } from '../../services';
-import { useDateRange } from '../../hooks/useDateRange';
+import { useDateRange, netWorthDateRangeOptions } from '../../hooks/useDateRange';
 import { getUserAccountId } from '../../utils/accountUtils';
 import DateRangeSelector from '../shared/DateRangeSelector';
 import SettingsManager from './SettingsManager';
@@ -815,6 +815,7 @@ const NetWorth: React.FC = () => {
         <div className="networth-header-controls">
           <DateRangeSelector
             {...dateRangeState}
+            options={netWorthDateRangeOptions}
             showDatePickers={true}
             size="small"
           />

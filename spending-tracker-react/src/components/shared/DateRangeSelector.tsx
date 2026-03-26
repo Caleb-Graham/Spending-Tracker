@@ -14,6 +14,7 @@ import { dateRangeOptions, DateRangeState, DateRangeActions } from '../../hooks/
 interface DateRangeSelectorProps extends DateRangeState, DateRangeActions {
   showDatePickers?: boolean;
   size?: 'small' | 'medium';
+  options?: { value: string; label: string }[];
 }
 
 const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
@@ -26,6 +27,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
   setEndDate,
   showDatePickers = true,
   size = 'small',
+  options = dateRangeOptions,
 }) => {
   const handleDateRangeChange = async (event: any) => {
     const value = event.target.value;
@@ -43,7 +45,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
           onChange={handleDateRangeChange}
           disabled={isLoading}
         >
-          {dateRangeOptions.map((option: { value: string; label: string }) => (
+          {options.map((option: { value: string; label: string }) => (
             <MenuItem key={option.value} value={option.value}>
               {option.label}
             </MenuItem>
