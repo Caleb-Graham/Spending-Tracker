@@ -29,8 +29,8 @@ import {
   Badge,
   Divider
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon, FilterList as FilterListIcon } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon, FilterList as FilterListIcon, CompareArrows as CompareArrowsIcon, Close as CloseIcon } from '@mui/icons-material';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { getLocalToday, formatDate } from '../../utils/dateUtils';
 import { 
   getNetWorthCategorySummaryNeon,
@@ -73,7 +73,10 @@ const NetWorth: React.FC = () => {
   
   // Pagination state for historical snapshots
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    const saved = localStorage.getItem('netWorth_rowsPerPage');
+    return saved ? parseInt(saved, 10) : 10;
+  });
   
   // Add snapshot modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -87,6 +90,12 @@ const NetWorth: React.FC = () => {
 
   // Get access token for date range hook
   const [accessToken, setAccessToken] = useState<string>();
+
+  // Compare mode state
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [compareSnapshot, setCompareSnapshot] = useState<NetWorthSnapshot | null>(null);
+  const [compareDetails, setCompareDetails] = useState<NetWorthCategorySummary | null>(null);
+  const [isLoadingCompare, setIsLoadingCompare] = useState(false);
 
   useEffect(() => {
     const fetchToken = async () => {
@@ -182,7 +191,9 @@ const NetWorth: React.FC = () => {
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+    const value = parseInt(event.target.value, 10);
+    localStorage.setItem('netWorth_rowsPerPage', String(value));
+    setRowsPerPage(value);
     setPage(0);
   };
 
@@ -241,11 +252,38 @@ const NetWorth: React.FC = () => {
     }
   };
 
+  const loadCompareDetails = async (snapshotId: number) => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      setIsLoadingCompare(true);
+      const summary = await getNetWorthCategorySummaryNeon(token, snapshotId);
+      setCompareDetails(summary);
+    } catch (error) {
+      console.error('Failed to load compare details:', error);
+      setCompareDetails(null);
+    } finally {
+      setIsLoadingCompare(false);
+    }
+  };
+
+  const exitCompareMode = () => {
+    setIsCompareMode(false);
+    setCompareSnapshot(null);
+    setCompareDetails(null);
+  };
+
   const handleSnapshotSelect = (snapshot: NetWorthSnapshot) => {
-    // Find the snapshot with calculated changes
     const snapshotWithChanges = snapshotsWithChanges.find(s => s.snapshotId === snapshot.snapshotId) || snapshot;
-    setSelectedSnapshot(snapshotWithChanges);
-    loadCategorySummary(snapshot.snapshotId);
+    if (isCompareMode) {
+      // Don't allow comparing a snapshot to itself
+      if (snapshot.snapshotId === selectedSnapshot?.snapshotId) return;
+      setCompareSnapshot(snapshotWithChanges);
+      loadCompareDetails(snapshot.snapshotId);
+    } else {
+      setSelectedSnapshot(snapshotWithChanges);
+      loadCategorySummary(snapshot.snapshotId);
+    }
   };
 
   // Calculate percentage and dollar changes for snapshots
@@ -697,6 +735,56 @@ const NetWorth: React.FC = () => {
     })}`;
   };
 
+  // Build per-account delta rows between two category summaries.
+  // delta = compare − base (positive = grew toward compare date)
+  const buildCompareRows = (
+    base: NetWorthCategorySummary,
+    compare: NetWorthCategorySummary,
+    isBaseNewer: boolean
+  ) => {
+    type Row = { name: string; category: string; isAsset: boolean; baseValue: number | null; compareValue: number | null; delta: number | null; deltaPercent: number | null };
+    const rows: Row[] = [];
+
+    // Collect all account ids/names from both sides
+    const accountMap = new Map<number, { name: string; category: string; isAsset: boolean }>();
+    [...base.categories, ...compare.categories].forEach(cat => {
+      cat.items.forEach(item => {
+        if (!accountMap.has(item.accountId)) {
+          accountMap.set(item.accountId, { name: item.name, category: cat.category, isAsset: cat.isAsset });
+        }
+      });
+    });
+
+    // Build value lookups
+    const baseValues = new Map<number, number>();
+    const compareValues = new Map<number, number>();
+    base.categories.forEach(cat => cat.items.forEach(item => baseValues.set(item.accountId, item.value)));
+    compare.categories.forEach(cat => cat.items.forEach(item => compareValues.set(item.accountId, item.value)));
+
+    accountMap.forEach((meta, accountId) => {
+      // null = brand new account (didn't exist in the OLDER snapshot) → show —
+      // 0   = account existed in older snapshot but absent from newer → show $0 + change
+      const baseVal = baseValues.has(accountId) ? baseValues.get(accountId)! : null;
+      const rawCompareVal = compareValues.has(accountId) ? compareValues.get(accountId)! : null;
+      // base is newer: if account gone from base but existed in compare (older) → base = 0
+      // base is older: if account gone from compare (newer) but existed in base → compare = 0
+      const baseVal2: number | null = (baseVal === null && !isBaseNewer && rawCompareVal !== null) ? 0 : baseVal;
+      const compareVal: number | null = (rawCompareVal === null && isBaseNewer && baseVal !== null) ? 0 : rawCompareVal;
+      const delta = baseVal2 !== null && compareVal !== null ? compareVal - baseVal2 : null;
+      const deltaPercent = baseVal !== null && delta !== null && baseVal !== 0 ? (delta / Math.abs(baseVal)) * 100 : null;
+      rows.push({ ...meta, baseValue: baseVal2, compareValue: compareVal, delta, deltaPercent });
+    });
+
+    // Sort by category then name
+    rows.sort((a, b) => {
+      if (a.isAsset !== b.isAsset) return a.isAsset ? -1 : 1;
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return a.name.localeCompare(b.name);
+    });
+
+    return rows;
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
@@ -936,6 +1024,15 @@ const NetWorth: React.FC = () => {
                   }}
                   name={hasActiveFilter ? getFilterLabel() : "Net Worth"}
                 />
+                {compareSnapshot && (
+                  <ReferenceLine
+                    x={formatDate(compareSnapshot.date, 'MMM yyyy')}
+                    stroke="#FF9800"
+                    strokeWidth={2}
+                    strokeDasharray="4 2"
+                    label={{ value: formatDate(compareSnapshot.date, 'MMM yyyy'), position: 'top', fontSize: 11, fill: '#FF9800' }}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -971,14 +1068,36 @@ const NetWorth: React.FC = () => {
                 </Box>
               )}
             </Box>
-            <Button
-              variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={() => handleEditSnapshot(selectedSnapshot)}
-              size="small"
-            >
-              Edit Snapshot
-            </Button>
+            <Box display="flex" gap={1}>
+              {isCompareMode ? (
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={<CloseIcon />}
+                  onClick={exitCompareMode}
+                  size="small"
+                >
+                  Exit Compare
+                </Button>
+              ) : (
+                <Button
+                  variant="outlined"
+                  startIcon={<CompareArrowsIcon />}
+                  onClick={() => { setIsCompareMode(true); setCompareSnapshot(null); setCompareDetails(null); }}
+                  size="small"
+                >
+                  Compare
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={() => handleEditSnapshot(selectedSnapshot)}
+                size="small"
+              >
+                Edit Snapshot
+              </Button>
+            </Box>
           </Box>
 
           {/* Notes */}
@@ -988,60 +1107,280 @@ const NetWorth: React.FC = () => {
             </Typography>
           )}
 
-          {/* Asset & Liability Breakdown */}
-          {categorySummary && (
-            <>
-              {isLoadingDetail ? (
-                <Box display="flex" justifyContent="center" py={4}>
-                  <CircularProgress />
+          {/* Compare / Single breakdown */}
+          {compareSnapshot && categorySummary && compareDetails ? (
+            (() => {
+              const isCompareOlder = compareSnapshot.date < selectedSnapshot.date;
+              const compareRows = buildCompareRows(categorySummary, compareDetails, !isCompareOlder);
+              const baseNetWorth = selectedSnapshot.netWorth ?? 0;
+              const compareNetWorth = compareSnapshot.netWorth ?? 0;
+              const netDelta = compareNetWorth - baseNetWorth;
+
+              const baseAssets = categorySummary.totalAssets;
+              const compareAssets = compareDetails.totalAssets;
+              const assetDelta = compareAssets - baseAssets;
+
+              const baseLiabilities = categorySummary.totalLiabilities;
+              const compareLiabilities = compareDetails.totalLiabilities;
+              const liabilityDelta = compareLiabilities - baseLiabilities;
+
+              const assetRows = compareRows.filter(r => r.isAsset);
+              const liabilityRows = compareRows.filter(r => !r.isAsset);
+
+              const groupByCategory = (rows: typeof compareRows) =>
+                rows.reduce<Record<string, typeof compareRows>>((acc, r) => {
+                  if (!acc[r.category]) acc[r.category] = [];
+                  acc[r.category].push(r);
+                  return acc;
+                }, {});
+
+              const assetCategories = groupByCategory(assetRows);
+              const liabilityCategories = groupByCategory(liabilityRows);
+
+              const baseDate = formatDate(selectedSnapshot.date, 'MMM yyyy');
+              const compareDate = formatDate(compareSnapshot.date, 'MMM yyyy');
+
+              // Always show oldest on the left, newest on the right
+              const leftDate = isCompareOlder ? compareDate : baseDate;
+              const rightDate = isCompareOlder ? baseDate : compareDate;
+              // lv/rv: pick left (older) or right (newer) value given (baseValue, compareValue)
+              const lv = (a: number | null, b: number | null) => isCompareOlder ? b : a;
+              const rv = (a: number | null, b: number | null) => isCompareOlder ? a : b;
+              // dd: orient a delta so positive = growth when reading left→right
+              const dd = (delta: number | null) => delta === null ? null : (isCompareOlder ? -delta : delta);
+
+              const olderNetWorth = lv(baseNetWorth, compareNetWorth)!;
+              const displayNetDelta = dd(netDelta) as number;
+              const displayNetDeltaPct = olderNetWorth !== 0
+                ? (displayNetDelta / Math.abs(olderNetWorth)) * 100
+                : null;
+
+              const renderDelta = (delta: number | null, bold = false) => {
+                if (delta === null || delta === 0) return <Typography variant="body2" component="span" color="text.secondary">—</Typography>;
+                const positive = delta > 0;
+                return (
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-block',
+                      px: 0.75,
+                      py: 0.15,
+                      borderRadius: 0.75,
+                      bgcolor: positive ? (isDark ? 'rgba(76, 175, 80, 0.22)' : 'rgba(76, 175, 80, 0.15)') : (isDark ? 'rgba(244, 67, 54, 0.22)' : 'rgba(244, 67, 54, 0.15)'),
+                      color: positive ? 'success.main' : 'error.main',
+                      fontWeight: bold ? 700 : 600,
+                      fontSize: '0.8125rem',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {`${positive ? '+' : '-'}${formatCurrency(delta)}`}
+                  </Box>
+                );
+              };
+
+              return (
+                <Box>
+                  {/* Summary cards */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 2, mb: 3, alignItems: 'center' }}>
+                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {leftDate}
+                      </Typography>
+                      <Typography variant="h5" fontWeight={700}>
+                        {formatCurrency(lv(baseNetWorth, compareNetWorth)!)}
+                      </Typography>
+                    </Paper>
+                    <Box sx={{ textAlign: 'center', px: 1 }}>
+                      <CompareArrowsIcon sx={{ color: 'text.secondary', fontSize: 20, mb: 0.5 }} />
+                      <br />
+                      <Chip
+                        label={`${displayNetDelta >= 0 ? '+' : '-'}${formatCurrency(displayNetDelta)}${displayNetDeltaPct !== null ? ` (${displayNetDelta >= 0 ? '+' : ''}${displayNetDeltaPct.toFixed(1)}%)` : ''}`}
+                        color={displayNetDelta >= 0 ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </Box>
+                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {rightDate}
+                      </Typography>
+                      <Typography variant="h5" fontWeight={700}>
+                        {formatCurrency(rv(baseNetWorth, compareNetWorth)!)}
+                      </Typography>
+                    </Paper>
+                  </Box>
+
+                  {/* Full comparison table */}
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 600, width: '40%' }}></TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>{leftDate}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>{rightDate}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>Change</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {/* Assets section */}
+                        {assetRows.length > 0 && (
+                          <>
+                            <TableRow>
+                              <TableCell colSpan={4} sx={{ fontWeight: 700, bgcolor: isDark ? 'rgba(76, 175, 80, 0.08)' : 'rgba(76, 175, 80, 0.04)', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.06em', py: 1, color: 'success.main' }}>
+                                Assets
+                              </TableCell>
+                            </TableRow>
+                            {Object.entries(assetCategories).map(([cat, rows]) => {
+                              const catBase = rows.reduce((s, r) => s + (r.baseValue ?? 0), 0);
+                              const catCompare = rows.reduce((s, r) => s + (r.compareValue ?? 0), 0);
+                              const catDelta = catCompare - catBase;
+                              return (
+                                <React.Fragment key={cat}>
+                                  <TableRow>
+                                    <TableCell sx={{ pl: 2, fontWeight: 600, pb: 0 }}>{cat}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>{formatCurrency(lv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>{formatCurrency(rv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}>{renderDelta(dd(catDelta) as number, true)}</TableCell>
+                                  </TableRow>
+                                  {rows.map(row => (
+                                    <TableRow key={row.name} sx={{ '& td': { borderBottom: 'none', py: 0.5 } }}>
+                                      <TableCell sx={{ pl: 4, color: 'text.secondary' }}>{row.name}</TableCell>
+                                      <TableCell align="right" sx={{ color: 'text.secondary' }}>{lv(row.baseValue, row.compareValue) !== null ? formatCurrency(lv(row.baseValue, row.compareValue)!) : '—'}</TableCell>
+                                      <TableCell align="right" sx={{ color: 'text.secondary' }}>{rv(row.baseValue, row.compareValue) !== null ? formatCurrency(rv(row.baseValue, row.compareValue)!) : '—'}</TableCell>
+                                      <TableCell align="right">{renderDelta(dd(row.delta))}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </React.Fragment>
+                              );
+                            })}
+                            {/* Total Assets */}
+                            <TableRow sx={{ bgcolor: isDark ? 'rgba(76, 175, 80, 0.06)' : 'rgba(76, 175, 80, 0.03)' }}>
+                              <TableCell sx={{ fontWeight: 700 }}>Total Assets</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700 }}>{formatCurrency(lv(baseAssets, compareAssets)!)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700 }}>{formatCurrency(rv(baseAssets, compareAssets)!)}</TableCell>
+                              <TableCell align="right">{renderDelta(dd(assetDelta) as number, true)}</TableCell>
+                            </TableRow>
+                          </>
+                        )}
+
+                        {/* Liabilities section */}
+                        {liabilityRows.length > 0 && (
+                          <>
+                            <TableRow>
+                              <TableCell colSpan={4} sx={{ fontWeight: 700, bgcolor: isDark ? 'rgba(244, 67, 54, 0.08)' : 'rgba(244, 67, 54, 0.04)', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.06em', py: 1, color: 'error.main' }}>
+                                Liabilities
+                              </TableCell>
+                            </TableRow>
+                            {Object.entries(liabilityCategories).map(([cat, rows]) => {
+                              const catBase = rows.reduce((s, r) => s + (r.baseValue ?? 0), 0);
+                              const catCompare = rows.reduce((s, r) => s + (r.compareValue ?? 0), 0);
+                              const catDelta = catCompare - catBase;
+                              // For liabilities: a decrease in magnitude is good (positive net effect)
+                              const liabRowDelta = (row: typeof rows[0]) => { const d = dd(row.delta); return d === null ? null : -d; };
+                              const liabCatNetDelta = -(dd(catDelta) as number);
+                              return (
+                                <React.Fragment key={cat}>
+                                  <TableRow>
+                                    <TableCell sx={{ pl: 2, fontWeight: 600, pb: 0 }}>{cat}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>-{formatCurrency(lv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>-{formatCurrency(rv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}>{renderDelta(liabCatNetDelta, true)}</TableCell>
+                                  </TableRow>
+                                  {rows.map(row => (
+                                    <TableRow key={row.name} sx={{ '& td': { borderBottom: 'none', py: 0.5 } }}>
+                                      <TableCell sx={{ pl: 4, color: 'text.secondary' }}>{row.name}</TableCell>
+                                      <TableCell align="right" sx={{ color: 'text.secondary' }}>{lv(row.baseValue, row.compareValue) !== null ? `-${formatCurrency(lv(row.baseValue, row.compareValue)!)}` : '—'}</TableCell>
+                                      <TableCell align="right" sx={{ color: 'text.secondary' }}>{rv(row.baseValue, row.compareValue) !== null ? `-${formatCurrency(rv(row.baseValue, row.compareValue)!)}` : '—'}</TableCell>
+                                      <TableCell align="right">{renderDelta(liabRowDelta(row))}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </React.Fragment>
+                              );
+                            })}
+                            {/* Total Liabilities */}
+                            <TableRow sx={{ bgcolor: isDark ? 'rgba(244, 67, 54, 0.06)' : 'rgba(244, 67, 54, 0.03)' }}>
+                              <TableCell sx={{ fontWeight: 700 }}>Total Liabilities</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700 }}>-{formatCurrency(lv(baseLiabilities, compareLiabilities)!)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 700 }}>-{formatCurrency(rv(baseLiabilities, compareLiabilities)!)}</TableCell>
+                              <TableCell align="right">{renderDelta(-(dd(liabilityDelta) as number), true)}</TableCell>
+                            </TableRow>
+                          </>
+                        )}
+
+                        {/* Net Worth row */}
+                        <TableRow sx={{ bgcolor: isDark ? 'rgba(33, 150, 243, 0.1)' : 'rgba(33, 150, 243, 0.05)' }}>
+                          <TableCell sx={{ fontWeight: 700, fontSize: '0.95rem' }}>Net Worth</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>{formatCurrency(lv(baseNetWorth, compareNetWorth)!)}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, fontSize: '0.95rem' }}>{formatCurrency(rv(baseNetWorth, compareNetWorth)!)}</TableCell>
+                          <TableCell align="right" sx={{ fontSize: '0.95rem' }}>{renderDelta(displayNetDelta, true)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 </Box>
-              ) : (
-                <Box className="breakdown-grid" sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 2 }}>
-                  {categorySummary.categories.map((category) => (
-                    <Card 
-                      key={`${category.category}-${category.isAsset}`} 
-                      variant="outlined"
-                      sx={{ height: '100%' }}
-                    >
-                      <CardContent>
-                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                          <Typography variant="subtitle1" fontWeight="bold">
-                            {category.category}
-                          </Typography>
-                          <Chip
-                            label={formatCurrency(category.totalValue)}
-                            color={category.isAsset ? 'success' : 'error'}
-                            variant={category.isAsset ? 'filled' : 'outlined'}
-                            size="small"
-                          />
-                        </Box>
-                        <Box>
-                          {category.items.map((item, itemIndex) => (
-                            <Box
-                              key={`${item.accountId}-${itemIndex}`}
-                              display="flex"
-                              justifyContent="space-between"
-                              alignItems="center"
-                              py={0.5}
-                            >
-                              <Typography variant="body2">
-                                {item.name}
-                              </Typography>
-                              <Typography
-                                variant="body2"
-                                color={item.value >= 0 ? 'textPrimary' : 'error'}
+              );
+            })()
+          ) : isCompareMode && !compareSnapshot ? (
+            <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+              <CompareArrowsIcon sx={{ fontSize: 40, mb: 1, opacity: 0.4 }} />
+              <Typography variant="body1">Select a snapshot from the table below to compare</Typography>
+            </Box>
+          ) : isLoadingCompare ? (
+            <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>
+          ) : (
+            categorySummary && (
+              <>
+                {isLoadingDetail ? (
+                  <Box display="flex" justifyContent="center" py={4}>
+                    <CircularProgress />
+                  </Box>
+                ) : (
+                  <Box className="breakdown-grid" sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 2 }}>
+                    {categorySummary.categories.map((category) => (
+                      <Card
+                        key={`${category.category}-${category.isAsset}`}
+                        variant="outlined"
+                        sx={{ height: '100%' }}
+                      >
+                        <CardContent>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                            <Typography variant="subtitle1" fontWeight="bold">
+                              {category.category}
+                            </Typography>
+                            <Chip
+                              label={formatCurrency(category.totalValue)}
+                              color={category.isAsset ? 'success' : 'error'}
+                              variant={category.isAsset ? 'filled' : 'outlined'}
+                              size="small"
+                            />
+                          </Box>
+                          <Box>
+                            {category.items.map((item, itemIndex) => (
+                              <Box
+                                key={`${item.accountId}-${itemIndex}`}
+                                display="flex"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                py={0.5}
                               >
-                                {item.value >= 0 ? '' : '-'}{formatCurrency(item.value)}
-                              </Typography>
-                            </Box>
-                          ))}
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Box>
-              )}
-            </>
+                                <Typography variant="body2">
+                                  {item.name}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  color={category.isAsset ? 'text.primary' : 'error.main'}
+                                >
+                                  {formatCurrency(item.value)}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Box>
+                )}
+              </>
+            )
           )}
         </Paper>
       )}
@@ -1052,6 +1391,14 @@ const NetWorth: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             Historical Snapshots
           </Typography>
+          {isCompareMode && (
+            <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1, bgcolor: 'warning.main', color: 'warning.contrastText', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CompareArrowsIcon fontSize="small" />
+              <Typography variant="body2" fontWeight={600}>
+                Compare mode — click a row to select the comparison snapshot
+              </Typography>
+            </Box>
+          )}
           <TableContainer>
             <Table size="small">
               <TableHead>
@@ -1070,10 +1417,13 @@ const NetWorth: React.FC = () => {
                     <TableRow
                       key={snapshot.snapshotId}
                       style={{
-                        backgroundColor: selectedSnapshot?.snapshotId === snapshot.snapshotId 
-                          ? (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5') 
-                          : 'transparent',
-                        cursor: 'pointer'
+                        backgroundColor: compareSnapshot?.snapshotId === snapshot.snapshotId
+                          ? (isDark ? 'rgba(255, 152, 0, 0.18)' : 'rgba(255, 152, 0, 0.12)')
+                          : selectedSnapshot?.snapshotId === snapshot.snapshotId 
+                            ? (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5') 
+                            : 'transparent',
+                        cursor: isCompareMode && snapshot.snapshotId === selectedSnapshot?.snapshotId ? 'not-allowed' : 'pointer',
+                        opacity: isCompareMode && snapshot.snapshotId === selectedSnapshot?.snapshotId ? 0.4 : 1,
                       }}
                       hover
                       onClick={() => handleSnapshotSelect(snapshot)}

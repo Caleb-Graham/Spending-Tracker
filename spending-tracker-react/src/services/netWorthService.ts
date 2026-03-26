@@ -177,7 +177,7 @@ export const getNetWorthCategorySummaryNeon = async (
     .select(
       `
       Value,
-      NetWorthAccounts(AccountId, Name, IsAsset, NetWorthCategories(CategoryId, Name))
+      NetWorthAccounts(NetWorthAccountId, Name, IsAsset, NetWorthCategories(CategoryId, Name))
     `,
     )
     .eq("SnapshotId", snapshotId);
@@ -197,7 +197,9 @@ export const getNetWorthCategorySummaryNeon = async (
     const account = row.NetWorthAccounts;
     const netWorthCategory = account.NetWorthCategories;
     const categoryName = netWorthCategory?.Name || "Uncategorized";
-    const value = parseFloat(row.Value);
+    // Liabilities are stored as negative in the DB; normalise to positive for display
+    const rawValue = parseFloat(row.Value);
+    const value = account.IsAsset ? rawValue : Math.abs(rawValue);
     const key = `${categoryName}-${account.IsAsset}`;
 
     if (!categories.has(key)) {
@@ -211,7 +213,7 @@ export const getNetWorthCategorySummaryNeon = async (
 
     const category = categories.get(key)!;
     category.items.push({
-      accountId: account.AccountId,
+      accountId: account.NetWorthAccountId,
       category: categoryName,
       name: account.Name,
       value,

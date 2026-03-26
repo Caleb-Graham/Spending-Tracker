@@ -57,7 +57,10 @@ const Transactions = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    const saved = localStorage.getItem('transactions_rowsPerPage');
+    return saved ? parseInt(saved, 10) : 25;
+  });
 
   // Filter states
   const [typeFilter, setTypeFilter] = useState<string>('all'); // 'all', 'income', 'expense'
@@ -219,7 +222,9 @@ const Transactions = () => {
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+    const value = parseInt(event.target.value, 10);
+    localStorage.setItem('transactions_rowsPerPage', String(value));
+    setRowsPerPage(value);
     setPage(0);
   };
 
