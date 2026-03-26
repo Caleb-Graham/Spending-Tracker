@@ -633,6 +633,7 @@ const Transactions = () => {
 
   const handleEditClose = () => {
     setEditDialogOpen(false);
+    setExpandedCatsEdit(new Set());
     setEditingTransaction(null);
     setEditFormData({ 
       date: '', 
@@ -1105,6 +1106,7 @@ const Transactions = () => {
 
   const handleCreateClose = () => {
     setCreateDialogOpen(false);
+    setExpandedCatsCreate(new Set());
     setCreateFormData({
       date: getLocalToday(),
       note: '',
