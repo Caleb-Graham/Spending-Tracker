@@ -554,6 +554,24 @@ const Transactions = () => {
     return result;
   };
 
+  // Returns just the category name, or a breadcrumb path if the name is ambiguous
+  // (i.e. the same name exists under multiple different parents).
+  const getCategoryDisplayLabel = (category: { categoryId: number; name: string } | null | undefined): string => {
+    if (!category) return 'Uncategorized';
+    const duplicated = categories.filter(c => c.name === category.name).length > 1;
+    if (!duplicated) return category.name;
+    // Build full path from root to this category using the categories array
+    const parts: string[] = [category.name];
+    let current = categories.find(c => c.categoryId === category.categoryId);
+    while (current?.parentCategoryId) {
+      const parent = categories.find(c => c.categoryId === current!.parentCategoryId);
+      if (!parent) break;
+      parts.unshift(parent.name);
+      current = parent;
+    }
+    return parts.join(' > ');
+  };
+
   const clearFilters = () => {
     setTypeFilter('all');
     setCategoryFilter('all');
@@ -1694,7 +1712,7 @@ const Transactions = () => {
                       })()}
                     </TableCell>
                     <TableCell>{transaction.note}</TableCell>
-                    <TableCell>{transaction.category?.name || 'Uncategorized'}</TableCell>
+                    <TableCell>{getCategoryDisplayLabel(transaction.category)}</TableCell>
                     <TableCell 
                       align="right" 
                       className={transaction.isIncome ? 'amount-income' : 'amount-expense'}
