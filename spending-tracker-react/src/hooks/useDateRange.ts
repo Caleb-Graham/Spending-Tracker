@@ -7,6 +7,54 @@ import {
   type NetWorthSnapshot,
 } from "../services";
 
+const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+
+/** Reads a date stored as {value, timestamp} JSON. Returns null if missing or >24h old. */
+function readStoredDate(key: string): Date | null {
+  const stored = localStorage.getItem(key);
+  if (!stored) return null;
+  try {
+    const { value, timestamp } = JSON.parse(stored);
+    if (value && timestamp && Date.now() - timestamp < TWENTY_FOUR_HOURS) {
+      return new Date(value);
+    }
+  } catch {
+    // Old plain ISO string format — treat as expired
+  }
+  return null;
+}
+
+function getInitialStartDate(range: string): Date | null {
+  const now = new Date();
+  switch (range) {
+    case "thisMonth":
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    case "lastMonth":
+      return new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    case "ytd":
+      return startOfYear(now);
+    case "lastYear":
+      return new Date(now.getFullYear() - 1, 0, 1);
+    default:
+      return null;
+  }
+}
+
+function getInitialEndDate(range: string): Date | null {
+  const now = new Date();
+  switch (range) {
+    case "thisMonth":
+    case "ytd":
+      return now;
+    case "lastMonth":
+      return new Date(now.getFullYear(), now.getMonth(), 0);
+    case "lastYear":
+      return new Date(now.getFullYear() - 1, 11, 31);
+    default:
+      return null;
+  }
+}
+
 export const dateRangeOptions = [
   { value: "thisMonth", label: "This Month" },
   { value: "lastMonth", label: "Last Month" },
@@ -52,62 +100,27 @@ export const useDateRange = (
     return saved || defaultRange;
   });
 
-  // Load custom date range from localStorage
+  // Load custom date range from localStorage (with 24h expiry)
   const [startDate, setStartDateState] = useState<Date | null>(() => {
-    const saved = localStorage.getItem(`${storageKey}-start-date`);
-    if (saved) {
-      return new Date(saved);
-    }
-    // If no saved date, initialize based on current dateRange
+    const saved = readStoredDate(`${storageKey}-start-date`);
+    if (saved) return saved;
     const savedRange =
       localStorage.getItem(`${storageKey}-date-range`) || defaultRange;
     return getInitialStartDate(savedRange);
   });
 
   const [endDate, setEndDateState] = useState<Date | null>(() => {
-    const saved = localStorage.getItem(`${storageKey}-end-date`);
-    if (saved) {
-      return new Date(saved);
-    }
-    // If no saved date, initialize based on current dateRange
+    const saved = readStoredDate(`${storageKey}-end-date`);
+    if (saved) return saved;
     const savedRange =
       localStorage.getItem(`${storageKey}-date-range`) || defaultRange;
-    return getInitialEndDate(savedRange);
+    // Fall back to today if the preset doesn't define an end date (e.g. "all")
+    return getInitialEndDate(savedRange) ?? new Date();
   });
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Helper functions to get initial dates
-  function getInitialStartDate(range: string): Date | null {
-    const now = new Date();
-    switch (range) {
-      case "thisMonth":
-        return new Date(now.getFullYear(), now.getMonth(), 1);
-      case "lastMonth":
-        return new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      case "ytd":
-        return startOfYear(now);
-      case "lastYear":
-        return new Date(now.getFullYear() - 1, 0, 1);
-      default:
-        return null;
-    }
-  }
-
-  function getInitialEndDate(range: string): Date | null {
-    const now = new Date();
-    switch (range) {
-      case "thisMonth":
-      case "ytd":
-        return now;
-      case "lastMonth":
-        return new Date(now.getFullYear(), now.getMonth(), 0);
-      case "lastYear":
-        return new Date(now.getFullYear() - 1, 11, 31);
-      default:
-        return null;
-    }
-  }
+  // Helper functions to get initial dates — defined at module level above
 
   // Function to get the earliest transaction date
   const getEarliestTransactionDate = async (): Promise<Date> => {
@@ -221,10 +234,16 @@ export const useDateRange = (
     }
   };
 
-  // Save custom dates to localStorage whenever they change
+  // Save custom dates to localStorage with timestamp for 24h expiry
   useEffect(() => {
     if (startDate) {
-      localStorage.setItem(`${storageKey}-start-date`, startDate.toISOString());
+      localStorage.setItem(
+        `${storageKey}-start-date`,
+        JSON.stringify({
+          value: startDate.toISOString(),
+          timestamp: Date.now(),
+        }),
+      );
     } else {
       localStorage.removeItem(`${storageKey}-start-date`);
     }
@@ -232,7 +251,10 @@ export const useDateRange = (
 
   useEffect(() => {
     if (endDate) {
-      localStorage.setItem(`${storageKey}-end-date`, endDate.toISOString());
+      localStorage.setItem(
+        `${storageKey}-end-date`,
+        JSON.stringify({ value: endDate.toISOString(), timestamp: Date.now() }),
+      );
     } else {
       localStorage.removeItem(`${storageKey}-end-date`);
     }
