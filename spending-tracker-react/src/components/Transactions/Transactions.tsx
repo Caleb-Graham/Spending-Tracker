@@ -162,9 +162,10 @@ const Transactions = () => {
   const [editVirtualDialogOpen, setEditVirtualDialogOpen] = useState(false);
   const [virtualTransactionToEdit, setVirtualTransactionToEdit] = useState<Transaction | null>(null);
 
-  // Expanded parent categories in dropdowns
-  const [expandedParentsCreate, setExpandedParentsCreate] = useState<Set<string>>(new Set());
-  const [expandedParentsEdit, setExpandedParentsEdit] = useState<Set<string>>(new Set());
+  // Expanded category IDs in dropdowns (filter popover, edit dialog, create dialog)
+  const [expandedCatsFilter, setExpandedCatsFilter] = useState<Set<number>>(new Set());
+  const [expandedCatsEdit, setExpandedCatsEdit] = useState<Set<number>>(new Set());
+  const [expandedCatsCreate, setExpandedCatsCreate] = useState<Set<number>>(new Set());
 
   // UI state for filter popover
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
@@ -434,78 +435,113 @@ const Transactions = () => {
     setEditFormData(prev => ({ ...prev, categoryId: '' }));
   }, [editFormData.isIncome]);
 
-  // Get categories filtered by transaction type
-  const getFilteredCategories = () => {
-    let filteredCategories;
-    
-    if (typeFilter === 'all') {
-      filteredCategories = categories;
-    } else {
-      // Get categories that have transactions of the selected type
-      const relevantCategories = new Set<number>();
-      
-      transactions.forEach(transaction => {
-        if (typeFilter === 'income' && transaction.isIncome && transaction.category) {
-          relevantCategories.add(transaction.category.categoryId);
-        } else if (typeFilter === 'expense' && !transaction.isIncome && transaction.category) {
-          relevantCategories.add(transaction.category.categoryId);
-        }
-      });
-
-      filteredCategories = categories.filter(category => relevantCategories.has(category.categoryId));
-    }
-
-    // Filter to only show non-archived child categories (those with a parentCategoryId)
-    filteredCategories = filteredCategories.filter(category => 
-      category.parentCategoryId !== null && 
-      category.parentCategoryId !== undefined &&
-      !category.isArchived
-    );
-
-    // Sort categories alphabetically by name
-    return filteredCategories.sort((a, b) => a.name.localeCompare(b.name));
-  };
-
-  // Group categories by parent for hierarchical display
-  const getGroupedCategoriesForForm = (isIncome: boolean) => {
-    const categoryType = isIncome ? 'Income' : 'Expense';
-    
-    // Build a map of categoryId -> categoryName for parent lookups
-    const categoryNameMap = new Map<number, string>();
-    categories.forEach(cat => {
-      categoryNameMap.set(cat.categoryId, cat.name);
-    });
-    
-    // Get all child categories for this type
-    const childCategories = categories.filter(category => 
-      category.type === categoryType && 
-      category.parentCategoryId !== null && 
-      category.parentCategoryId !== undefined &&
-      !category.isArchived
-    );
-
-    // Group by parent - use parentCategoryName if available, otherwise look up by parentCategoryId
-    const grouped = childCategories.reduce((acc, category) => {
-      const parentName = category.parentCategoryName || 
-        (category.parentCategoryId ? categoryNameMap.get(category.parentCategoryId) : null) || 
-        'Other';
-      if (!acc[parentName]) {
-        acc[parentName] = [];
+  // Build a flat list of {category, depth} for hierarchical Select rendering.
+  // depth=0 items are non-selectable group headers (ListSubheader).
+  // depth=1+ items are selectable, indented by depth.
+  // parentId is the immediate parent's categoryId (undefined for depth=0 roots).
+  const getHierarchicalCategoryItems = (typeFilter?: 'Income' | 'Expense') => {
+    const isParentOf = new Map<number, Category[]>();
+    categories.forEach(c => {
+      if (c.parentCategoryId && !c.isArchived) {
+        const arr = isParentOf.get(c.parentCategoryId) || [];
+        arr.push(c);
+        isParentOf.set(c.parentCategoryId, arr);
       }
-      acc[parentName].push(category);
-      return acc;
-    }, {} as Record<string, Category[]>);
+    });
 
-    // Sort parent names and child categories
-    const sortedGroups: [string, Category[]][] = Object.entries(grouped)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([parent, children]) => [
-        parent,
-        children.sort((a, b) => a.name.localeCompare(b.name))
-      ]);
+    // Roots: categories with no parent that have children (actual group parents)
+    const roots = categories
+      .filter(c => !c.parentCategoryId && !c.isArchived && (isParentOf.get(c.categoryId)?.length ?? 0) > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    return sortedGroups;
+    const result: Array<{ category: Category; depth: number; parentId?: number; hasChildren: boolean }> = [];
+
+    const traverse = (cat: Category, depth: number, parentId?: number) => {
+      const children = (isParentOf.get(cat.categoryId) || []).filter(c => !c.isArchived);
+      result.push({ category: cat, depth, parentId, hasChildren: children.length > 0 });
+      children
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(child => traverse(child, depth + 1, cat.categoryId));
+    };
+
+    roots.forEach(root => {
+      if (typeFilter) {
+        const hasMatch = (cat: Category): boolean => {
+          if (cat.type === typeFilter) return true;
+          return (isParentOf.get(cat.categoryId) || []).some(hasMatch);
+        };
+        if (!hasMatch(root)) return;
+      }
+      traverse(root, 0, undefined);
+    });
+
+    return result;
   };
+
+  // Render hierarchical category items for a Select dropdown.
+  // expandedIds: which category IDs are expanded. toggleId: callback to toggle one.
+  const renderCategoryMenuItems = (
+    items: ReturnType<typeof getHierarchicalCategoryItems>,
+    expandedIds: Set<number>,
+    toggleId: (id: number) => void
+  ) => {
+    return items
+      .filter(({ depth, parentId }) => {
+        if (depth === 0) return true;
+        // Visible only if direct parent is expanded
+        if (!parentId || !expandedIds.has(parentId)) return false;
+        return true;
+      })
+      .map(({ category, depth, hasChildren }) => {
+        if (depth === 0) {
+          const isExpanded = expandedIds.has(category.categoryId);
+          return (
+            <MenuItem
+              key={`hdr-${category.categoryId}`}
+              value={`toggle-${category.categoryId}`}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+              sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
+                {category.name}
+              </Box>
+            </MenuItem>
+          );
+        }
+        if (hasChildren) {
+          const isExpanded = expandedIds.has(category.categoryId);
+          return (
+            <MenuItem
+              key={`subhdr-${category.categoryId}`}
+              value={`toggle-${category.categoryId}`}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+              sx={{ pl: 2 + (depth - 1) * 3, fontWeight: 600, fontSize: '0.875rem' }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
+                {category.name}
+              </Box>
+            </MenuItem>
+          );
+        }
+        return (
+          <MenuItem key={category.categoryId} value={category.categoryId.toString()} sx={{ pl: 2 + (depth - 1) * 3 }}>
+            {category.name}
+          </MenuItem>
+        );
+      });
+  };
+
+  const toggleExpandId = (setter: React.Dispatch<React.SetStateAction<Set<number>>>) => (id: number) => {
+    setter(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+
 
   const clearFilters = () => {
     setTypeFilter('all');
@@ -1296,14 +1332,24 @@ const Transactions = () => {
                   <Select
                     value={categoryFilter}
                     label="Category"
-                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val.startsWith('toggle-')) {
+                        setCategoryFilter(val);
+                      }
+                    }}
+                    renderValue={(selected) => {
+                      if (selected === 'all') return 'All Categories';
+                      const cat = categories.find(c => c.categoryId.toString() === selected);
+                      return cat?.name || '';
+                    }}
                   >
                     <MenuItem value="all">All Categories</MenuItem>
-                    {getFilteredCategories().map((category) => (
-                      <MenuItem key={category.categoryId} value={category.categoryId.toString()}>
-                        {category.name}
-                      </MenuItem>
-                    ))}
+                    {renderCategoryMenuItems(
+                      getHierarchicalCategoryItems(),
+                      expandedCatsFilter,
+                      toggleExpandId(setExpandedCatsFilter)
+                    )}
                   </Select>
                 </FormControl>
                 <FormControl fullWidth size="small">
@@ -1746,7 +1792,7 @@ const Transactions = () => {
                 onChange={(e) => {
                   const value = e.target.value;
                   // Only set if it's a valid category (not a parent toggle)
-                  if (!value.startsWith('toggle-parent-')) {
+                  if (!value.startsWith('toggle-')) {
                     setEditFormData({ ...editFormData, categoryId: value });
                   }
                 }}
@@ -1756,42 +1802,11 @@ const Transactions = () => {
                   return category?.name || '';
                 }}
               >
-                {getGroupedCategoriesForForm(editFormData.isIncome).flatMap(([parentName, children]) => {
-                  const isExpanded = expandedParentsEdit.has(parentName);
-                  return [
-                    <MenuItem
-                      key={`parent-${parentName}`}
-                      value={`toggle-parent-${parentName}`}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setExpandedParentsEdit(prev => {
-                          const next = new Set(prev);
-                          if (next.has(parentName)) {
-                            next.delete(parentName);
-                          } else {
-                            next.add(parentName);
-                          }
-                          return next;
-                        });
-                      }}
-                      sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                        {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
-                        {parentName}
-                        <Typography variant="caption" sx={{ ml: 'auto', opacity: 0.6 }}>
-                          {children.length}
-                        </Typography>
-                      </Box>
-                    </MenuItem>,
-                    ...(isExpanded ? children.map((category) => (
-                      <MenuItem key={category.categoryId} value={category.categoryId.toString()} sx={{ pl: 5 }}>
-                        {category.name}
-                      </MenuItem>
-                    )) : [])
-                  ];
-                })}
+                {renderCategoryMenuItems(
+                  getHierarchicalCategoryItems(editFormData.isIncome ? 'Income' : 'Expense'),
+                  expandedCatsEdit,
+                  toggleExpandId(setExpandedCatsEdit)
+                )}
               </Select>
             </FormControl>
             
@@ -2002,7 +2017,7 @@ const Transactions = () => {
                 onChange={(e) => {
                   const value = e.target.value;
                   // Only set if it's a valid category (not a parent toggle)
-                  if (!value.startsWith('toggle-parent-')) {
+                  if (!value.startsWith('toggle-')) {
                     setCreateFormData({ ...createFormData, categoryId: value });
                   }
                 }}
@@ -2012,42 +2027,11 @@ const Transactions = () => {
                   return category?.name || '';
                 }}
               >
-                {getGroupedCategoriesForForm(createFormData.isIncome).flatMap(([parentName, children]) => {
-                  const isExpanded = expandedParentsCreate.has(parentName);
-                  return [
-                    <MenuItem
-                      key={`parent-${parentName}`}
-                      value={`toggle-parent-${parentName}`}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setExpandedParentsCreate(prev => {
-                          const next = new Set(prev);
-                          if (next.has(parentName)) {
-                            next.delete(parentName);
-                          } else {
-                            next.add(parentName);
-                          }
-                          return next;
-                        });
-                      }}
-                      sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                        {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
-                        {parentName}
-                        <Typography variant="caption" sx={{ ml: 'auto', opacity: 0.6 }}>
-                          {children.length}
-                        </Typography>
-                      </Box>
-                    </MenuItem>,
-                    ...(isExpanded ? children.map((category) => (
-                      <MenuItem key={category.categoryId} value={category.categoryId.toString()} sx={{ pl: 5 }}>
-                        {category.name}
-                      </MenuItem>
-                    )) : [])
-                  ];
-                })}
+                {renderCategoryMenuItems(
+                  getHierarchicalCategoryItems(createFormData.isIncome ? 'Income' : 'Expense'),
+                  expandedCatsCreate,
+                  toggleExpandId(setExpandedCatsCreate)
+                )}
               </Select>
             </FormControl>
             <TextField
