@@ -431,15 +431,7 @@ const Transactions = () => {
     setCategoryFilter('all');
   }, [typeFilter]);
 
-  // Reset category in create form when income/expense type changes
-  useEffect(() => {
-    setCreateFormData(prev => ({ ...prev, categoryId: '' }));
-  }, [createFormData.isIncome]);
 
-  // Reset category in edit form when income/expense type changes
-  useEffect(() => {
-    setEditFormData(prev => ({ ...prev, categoryId: '' }));
-  }, [editFormData.isIncome]);
 
   // Build a flat list of {category, depth} for hierarchical Select rendering.
   // depth=0 items are non-selectable group headers (ListSubheader).
@@ -655,15 +647,16 @@ const Transactions = () => {
       }
     }
     
+    const txCategoryId = (transaction.category?.categoryId ?? transaction.categoryId)?.toString() ?? '';
     setEditFormData({
       date: transaction.date.split('T')[0],
       note: transaction.note,
       amount: Math.abs(transaction.amount).toString(),
-      categoryId: transaction.category?.categoryId.toString() || '',
+      categoryId: txCategoryId,
       isIncome: transaction.isIncome,
       ...recurringData
     });
-    setExpandedCatsEdit(getAncestorsForCategory(transaction.category?.categoryId.toString() || ''));
+    setExpandedCatsEdit(getAncestorsForCategory(txCategoryId));
     setEditDialogOpen(true);
   };
 
@@ -710,12 +703,13 @@ const Transactions = () => {
         );
 
         // Open edit dialog with recurring transaction data
+        const virtualCategoryId = (recurring.category?.categoryId ?? recurring.categoryId)?.toString() ?? '';
         setEditingTransaction(virtualTransactionToEdit);
         setEditFormData({
           date: virtualTransactionToEdit.date.split('T')[0],
           note: virtualTransactionToEdit.note,
           amount: Math.abs(virtualTransactionToEdit.amount).toString(),
-          categoryId: virtualTransactionToEdit.category?.categoryId.toString() || '',
+          categoryId: virtualCategoryId,
           isIncome: virtualTransactionToEdit.isIncome,
           isRecurring: true,
           recurringFrequency: recurring.frequency,
@@ -723,7 +717,7 @@ const Transactions = () => {
           recurringEndDate: recurring.endAt ? recurring.endAt.split('T')[0] : '',
           recurringIsActive: true
         });
-        setExpandedCatsEdit(getAncestorsForCategory(virtualTransactionToEdit.category?.categoryId.toString() || ''));
+        setExpandedCatsEdit(getAncestorsForCategory(virtualCategoryId));
         setEditDialogOpen(true);
       } catch (error) {
         setNotification({ 
@@ -970,6 +964,12 @@ const Transactions = () => {
       const amount = parseFloat(editFormData.amount);
       if (isNaN(amount)) {
         setNotification({ message: 'Invalid amount', severity: 'error' });
+        return;
+      }
+
+      if (!editFormData.categoryId) {
+        setNotification({ message: 'Please select a category', severity: 'error' });
+        setIsSaving(false);
         return;
       }
 
@@ -1839,7 +1839,7 @@ const Transactions = () => {
               <Select
                 value={editFormData.isIncome ? 'income' : 'expense'}
                 label="Type"
-                onChange={(e) => setEditFormData({ ...editFormData, isIncome: e.target.value === 'income' })}
+                onChange={(e) => setEditFormData({ ...editFormData, isIncome: e.target.value === 'income', categoryId: '' })}
               >
                 <MenuItem value="expense">Expense</MenuItem>
                 <MenuItem value="income">Income</MenuItem>
@@ -2064,7 +2064,7 @@ const Transactions = () => {
               <Select
                 value={createFormData.isIncome ? 'income' : 'expense'}
                 label="Type"
-                onChange={(e) => setCreateFormData({ ...createFormData, isIncome: e.target.value === 'income' })}
+                onChange={(e) => setCreateFormData({ ...createFormData, isIncome: e.target.value === 'income', categoryId: '' })}
               >
                 <MenuItem value="expense">Expense</MenuItem>
                 <MenuItem value="income">Income</MenuItem>
