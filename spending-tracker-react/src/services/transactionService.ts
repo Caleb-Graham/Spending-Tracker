@@ -201,7 +201,6 @@ const materializePastVirtualTransactions = async (
 
   if (toUpsert.length > 0) {
     const { error } = await pg.from("Transactions").upsert(toUpsert, {
-      onConflict: "AccountId,RecurringTransactionId,RecurringInstanceKey",
       ignoreDuplicates: true,
     });
     // 23505 = duplicate key — row already exists, which is fine.
