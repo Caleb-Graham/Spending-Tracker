@@ -298,6 +298,20 @@ const Transactions = () => {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
+  // Returns all descendant category IDs (including the given parentId itself).
+  const getAllDescendantIds = (parentId: number): Set<number> => {
+    const result = new Set<number>();
+    const queue = [parentId];
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      result.add(id);
+      categories.forEach(c => {
+        if (c.parentCategoryId === id) queue.push(c.categoryId);
+      });
+    }
+    return result;
+  };
+
   // Filter transactions based on current filter settings
   const filteredTransactions = transactions.filter(transaction => {
     // Type filter
@@ -305,7 +319,15 @@ const Transactions = () => {
     if (typeFilter === 'expense' && transaction.isIncome) return false;
 
     // Category filter
-    if (categoryFilter !== 'all' && transaction.category?.categoryId !== parseInt(categoryFilter)) return false;
+    if (categoryFilter !== 'all') {
+      if (categoryFilter.startsWith('parent-')) {
+        const parentId = parseInt(categoryFilter.replace('parent-', ''), 10);
+        const descendantIds = getAllDescendantIds(parentId);
+        if (!transaction.category?.categoryId || !descendantIds.has(transaction.category.categoryId)) return false;
+      } else {
+        if (transaction.category?.categoryId !== parseInt(categoryFilter)) return false;
+      }
+    }
 
     // Person filter - 'all', 'me', or a specific userId
     if (personFilter === 'me' && transaction.userId !== user?.id) return false;
@@ -496,12 +518,17 @@ const Transactions = () => {
           return (
             <MenuItem
               key={`hdr-${category.categoryId}`}
-              value={`toggle-${category.categoryId}`}
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+              value={`parent-${category.categoryId}`}
               sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
+                <Box
+                  component="span"
+                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+                  sx={{ display: 'flex', alignItems: 'center', mr: 1, flexShrink: 0 }}
+                >
+                  {isExpanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+                </Box>
                 {category.name}
               </Box>
             </MenuItem>
@@ -512,12 +539,17 @@ const Transactions = () => {
           return (
             <MenuItem
               key={`subhdr-${category.categoryId}`}
-              value={`toggle-${category.categoryId}`}
-              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+              value={`parent-${category.categoryId}`}
               sx={{ pl: 2 + (depth - 1) * 3, fontWeight: 600, fontSize: '0.875rem' }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
+                <Box
+                  component="span"
+                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+                  sx={{ display: 'flex', alignItems: 'center', mr: 1, flexShrink: 0 }}
+                >
+                  {isExpanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+                </Box>
                 {category.name}
               </Box>
             </MenuItem>
@@ -1409,12 +1441,15 @@ const Transactions = () => {
                     label="Category"
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (!val.startsWith('toggle-')) {
-                        setCategoryFilter(val);
-                      }
+                      setCategoryFilter(val);
                     }}
                     renderValue={(selected) => {
                       if (selected === 'all') return 'All Categories';
+                      if (selected.startsWith('parent-')) {
+                        const id = parseInt(selected.replace('parent-', ''), 10);
+                        const cat = categories.find(c => c.categoryId === id);
+                        return cat ? `${cat.name} (all)` : '';
+                      }
                       const cat = categories.find(c => c.categoryId.toString() === selected);
                       return cat?.name || '';
                     }}
