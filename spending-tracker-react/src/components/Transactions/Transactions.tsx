@@ -166,6 +166,11 @@ const Transactions = () => {
   const [editVirtualDialogOpen, setEditVirtualDialogOpen] = useState(false);
   const [virtualTransactionToEdit, setVirtualTransactionToEdit] = useState<Transaction | null>(null);
 
+  // Edit materialized recurring transaction scope dialog
+  const [editMaterializedDialogOpen, setEditMaterializedDialogOpen] = useState(false);
+  const [materializedTransactionToEdit, setMaterializedTransactionToEdit] = useState<Transaction | null>(null);
+  const [editRecurringScope, setEditRecurringScope] = useState<'this' | 'all'>('all');
+
   // Expanded category IDs in dropdowns (filter popover, edit dialog, create dialog)
   const [expandedCatsFilter, setExpandedCatsFilter] = useState<Set<number>>(new Set());
   const [expandedCatsEdit, setExpandedCatsEdit] = useState<Set<number>>(new Set());
@@ -646,18 +651,51 @@ const Transactions = () => {
       return;
     }
 
+    // For materialized recurring transactions, ask scope first
+    if (transaction.recurringTransactionId) {
+      setMaterializedTransactionToEdit(transaction);
+      setEditMaterializedDialogOpen(true);
+      return;
+    }
+
+    // Non-recurring: open edit dialog directly
+    const txCategoryId = (transaction.category?.categoryId ?? transaction.categoryId)?.toString() ?? '';
     setEditingTransaction(transaction);
-    
-    // If this is a recurring transaction, fetch its details
+    setEditRecurringScope('all');
+    setEditFormData({
+      date: transaction.date.split('T')[0],
+      note: transaction.note,
+      amount: Math.abs(transaction.amount).toString(),
+      categoryId: txCategoryId,
+      isIncome: transaction.isIncome,
+      isRecurring: false,
+      recurringFrequency: 'MONTHLY' as RecurringFrequency,
+      recurringInterval: 1,
+      recurringEndDate: '',
+      recurringIsActive: true
+    });
+    setExpandedCatsEdit(getAncestorsForCategory(txCategoryId));
+    setEditDialogOpen(true);
+  };
+
+  const handleEditMaterializedChoice = async (scope: 'this' | 'all') => {
+    if (!materializedTransactionToEdit) return;
+    const transaction = materializedTransactionToEdit;
+    setEditMaterializedDialogOpen(false);
+    setMaterializedTransactionToEdit(null);
+    setEditRecurringScope(scope);
+
+    const txCategoryId = (transaction.category?.categoryId ?? transaction.categoryId)?.toString() ?? '';
+
     let recurringData = {
-      isRecurring: !!transaction.recurringTransactionId,
+      isRecurring: false,
       recurringFrequency: 'MONTHLY' as RecurringFrequency,
       recurringInterval: 1,
       recurringEndDate: '',
       recurringIsActive: true
     };
-    
-    if (transaction.recurringTransactionId && isAuthenticated) {
+
+    if (scope === 'all' && transaction.recurringTransactionId && isAuthenticated) {
       try {
         const accessToken = await getAccessToken();
         if (accessToken) {
@@ -671,15 +709,15 @@ const Transactions = () => {
             recurringFrequency: recurring.frequency,
             recurringInterval: recurring.interval,
             recurringEndDate: recurring.endAt ? recurring.endAt.split('T')[0] : '',
-            recurringIsActive: true // No longer using isActive field
+            recurringIsActive: true
           };
         }
       } catch (error) {
         console.error('Error fetching recurring transaction details:', error);
       }
     }
-    
-    const txCategoryId = (transaction.category?.categoryId ?? transaction.categoryId)?.toString() ?? '';
+
+    setEditingTransaction(transaction);
     setEditFormData({
       date: transaction.date.split('T')[0],
       note: transaction.note,
@@ -1052,8 +1090,8 @@ const Transactions = () => {
         );
       }
       
-      // Handle recurring transaction changes
-      if (editingTransaction.recurringTransactionId) {
+      // Handle recurring transaction changes (only when editing all future occurrences)
+      if (editingTransaction.recurringTransactionId && editRecurringScope === 'all') {
         if (editFormData.isRecurring) {
           // Update recurring transaction properties
           const { updateRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
@@ -1997,6 +2035,44 @@ const Transactions = () => {
               disabled={isSaving}
             >
               {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Edit Materialized Recurring Transaction Scope Dialog */}
+        <Dialog
+          open={editMaterializedDialogOpen}
+          onClose={() => { setEditMaterializedDialogOpen(false); setMaterializedTransactionToEdit(null); }}
+          maxWidth="xs"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: 3 } }}
+        >
+          <DialogTitle sx={{ pb: 1, fontWeight: 600 }}>Edit Recurring Transaction</DialogTitle>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pb: 2 }}>
+            <Button
+              onClick={() => handleEditMaterializedChoice('this')}
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
+            >
+              This Occurrence
+            </Button>
+            <Button
+              onClick={() => handleEditMaterializedChoice('all')}
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
+            >
+              All Future Occurrences
+            </Button>
+          </DialogContent>
+          <DialogActions sx={{ justifyContent: 'center', pb: 2.5, pt: 0 }}>
+            <Button
+              onClick={() => { setEditMaterializedDialogOpen(false); setMaterializedTransactionToEdit(null); }}
+              size="small"
+              sx={{ color: 'text.secondary', textTransform: 'none' }}
+            >
+              Cancel
             </Button>
           </DialogActions>
         </Dialog>
