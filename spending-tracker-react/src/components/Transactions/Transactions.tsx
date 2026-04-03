@@ -1262,9 +1262,20 @@ const Transactions = () => {
     }
   };
 
+  const getDefaultCreateDate = (): string => {
+    const today = new Date();
+    const isSameMonth = selectedDate.getFullYear() === today.getFullYear() &&
+      selectedDate.getMonth() === today.getMonth();
+    if (isSameMonth) return getLocalToday();
+    // Use the 1st of the viewed month
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-01`;
+  };
+
   const handleCreateOpen = () => {
     setCreateFormData({
-      date: getLocalToday(),
+      date: getDefaultCreateDate(),
       note: '',
       amount: '',
       categoryId: '',

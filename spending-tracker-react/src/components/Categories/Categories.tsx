@@ -793,7 +793,12 @@ const Categories = () => {
       }
       await loadData();
     } catch (error: any) {
-      showNotification(error.message || 'Delete failed', 'error');
+      const msg = error.message || '';
+      if (msg.includes('23503') || msg.includes('foreign key') || msg.includes('FK_Transactions_Category') || msg.includes('still referenced')) {
+        showNotification('This category still has transactions linked to it. Reassign or delete those transactions first, or archive this category instead.', 'error');
+      } else {
+        showNotification(msg || 'Delete failed', 'error');
+      }
     }
   };
 
