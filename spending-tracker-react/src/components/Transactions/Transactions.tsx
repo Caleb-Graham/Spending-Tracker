@@ -891,6 +891,31 @@ const Transactions = () => {
   };
 
   const deleteTransaction = async (transaction: Transaction) => {
+    // Materialized recurring transactions: skip this single occurrence instead of hard-deleting
+    // (hard-delete would cause re-materialization on next load)
+    if (!transaction.isVirtual && transaction.recurringTransactionId) {
+      if (!isAuthenticated) {
+        setError('Please sign in to delete transactions');
+        return;
+      }
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) throw new Error('No access token available');
+        await skipRecurringInstanceNeon(
+          transaction.recurringTransactionId,
+          transaction.date,
+          transaction.accountId,
+          accessToken,
+        );
+        setTransactions(transactions.filter(t => t.transactionId !== transaction.transactionId));
+        setNotification({ message: 'Recurring occurrence deleted', severity: 'success' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setNotification({ message: 'Failed to delete occurrence: ' + errorMessage, severity: 'error' });
+      }
+      return;
+    }
+
     // Virtual recurring transactions: skip this single occurrence
     if (transaction.isVirtual && transaction.recurringTransactionId) {
       if (!isAuthenticated) {
