@@ -1304,7 +1304,7 @@ const Transactions = () => {
     });
   };
 
-  const handleCreateTransaction = async () => {
+  const handleCreateTransaction = async (keepOpen = false) => {
     if (!isAuthenticated) {
       return;
     }
@@ -1426,7 +1426,22 @@ const Transactions = () => {
       }
 
       await loadTransactions();
-      handleCreateClose();
+      if (keepOpen) {
+        setExpandedCatsCreate(new Set());
+        setCreateFormData({
+          date: getDefaultCreateDate(),
+          note: '',
+          amount: '',
+          categoryId: '',
+          isIncome: createFormData.isIncome,
+          isRecurring: false,
+          recurringFrequency: 'MONTHLY' as RecurringFrequency,
+          recurringInterval: 1,
+          recurringEndDate: ''
+        });
+      } else {
+        handleCreateClose();
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setNotification({ message: `Failed to create: ${errorMessage}`, severity: 'error' });
@@ -2375,7 +2390,13 @@ const Transactions = () => {
           <DialogActions>
             <Button onClick={handleCreateClose}>Cancel</Button>
             <Button
-              onClick={handleCreateTransaction}
+              onClick={() => handleCreateTransaction(false)}
+              disabled={isCreating}
+            >
+              Create &amp; Close
+            </Button>
+            <Button
+              onClick={() => handleCreateTransaction(true)}
               variant="contained"
               disabled={isCreating}
             >
