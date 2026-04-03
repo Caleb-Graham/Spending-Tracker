@@ -505,10 +505,12 @@ const Transactions = () => {
 
   // Render hierarchical category items for a Select dropdown.
   // expandedIds: which category IDs are expanded. toggleId: callback to toggle one.
+  // allowParentSelection: if true, clicking a parent name selects it (filter use); otherwise parents only toggle expand.
   const renderCategoryMenuItems = (
     items: ReturnType<typeof getHierarchicalCategoryItems>,
     expandedIds: Set<number>,
-    toggleId: (id: number) => void
+    toggleId: (id: number) => void,
+    allowParentSelection = false
   ) => {
     return items
       .filter(({ depth, parentId }) => {
@@ -520,20 +522,35 @@ const Transactions = () => {
       .map(({ category, depth, hasChildren }) => {
         if (depth === 0) {
           const isExpanded = expandedIds.has(category.categoryId);
+          if (allowParentSelection) {
+            return (
+              <MenuItem
+                key={`hdr-${category.categoryId}`}
+                value={`parent-${category.categoryId}`}
+                sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <Box
+                    component="span"
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+                    sx={{ display: 'flex', alignItems: 'center', mr: 1, flexShrink: 0 }}
+                  >
+                    {isExpanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+                  </Box>
+                  {category.name}
+                </Box>
+              </MenuItem>
+            );
+          }
           return (
             <MenuItem
               key={`hdr-${category.categoryId}`}
-              value={`parent-${category.categoryId}`}
+              value={`toggle-${category.categoryId}`}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
               sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                <Box
-                  component="span"
-                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
-                  sx={{ display: 'flex', alignItems: 'center', mr: 1, flexShrink: 0 }}
-                >
-                  {isExpanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
-                </Box>
+                {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
                 {category.name}
               </Box>
             </MenuItem>
@@ -541,20 +558,35 @@ const Transactions = () => {
         }
         if (hasChildren) {
           const isExpanded = expandedIds.has(category.categoryId);
+          if (allowParentSelection) {
+            return (
+              <MenuItem
+                key={`subhdr-${category.categoryId}`}
+                value={`parent-${category.categoryId}`}
+                sx={{ pl: 2 + (depth - 1) * 3, fontWeight: 600, fontSize: '0.875rem' }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <Box
+                    component="span"
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
+                    sx={{ display: 'flex', alignItems: 'center', mr: 1, flexShrink: 0 }}
+                  >
+                    {isExpanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+                  </Box>
+                  {category.name}
+                </Box>
+              </MenuItem>
+            );
+          }
           return (
             <MenuItem
               key={`subhdr-${category.categoryId}`}
-              value={`parent-${category.categoryId}`}
+              value={`toggle-${category.categoryId}`}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
               sx={{ pl: 2 + (depth - 1) * 3, fontWeight: 600, fontSize: '0.875rem' }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                <Box
-                  component="span"
-                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleId(category.categoryId); }}
-                  sx={{ display: 'flex', alignItems: 'center', mr: 1, flexShrink: 0 }}
-                >
-                  {isExpanded ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
-                </Box>
+                {isExpanded ? <ExpandMoreIcon fontSize="small" sx={{ mr: 1 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 1 }} />}
                 {category.name}
               </Box>
             </MenuItem>
@@ -1444,7 +1476,7 @@ const Transactions = () => {
             <Popover
               open={Boolean(filterAnchorEl)}
               anchorEl={filterAnchorEl}
-              onClose={() => setFilterAnchorEl(null)}
+              onClose={() => { setFilterAnchorEl(null); setExpandedCatsFilter(new Set()); }}
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
@@ -1496,26 +1528,30 @@ const Transactions = () => {
                     {typeFilter === 'income' && renderCategoryMenuItems(
                       getHierarchicalCategoryItems('Income'),
                       expandedCatsFilter,
-                      toggleExpandId(setExpandedCatsFilter)
+                      toggleExpandId(setExpandedCatsFilter),
+                      true
                     )}
                     {typeFilter === 'expense' && renderCategoryMenuItems(
                       getHierarchicalCategoryItems('Expense'),
                       expandedCatsFilter,
-                      toggleExpandId(setExpandedCatsFilter)
+                      toggleExpandId(setExpandedCatsFilter),
+                      true
                     )}
                     {typeFilter === 'all' && [
                       <MenuItem key="income-header" disabled sx={{ opacity: 1, fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'success.main', py: 0.5 }}>Income</MenuItem>,
                       ...renderCategoryMenuItems(
                         getHierarchicalCategoryItems('Income'),
                         expandedCatsFilter,
-                        toggleExpandId(setExpandedCatsFilter)
+                        toggleExpandId(setExpandedCatsFilter),
+                        true
                       ),
                       <Divider key="type-divider" sx={{ my: 0.5 }} />,
                       <MenuItem key="expense-header" disabled sx={{ opacity: 1, fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'error.main', py: 0.5 }}>Expenses</MenuItem>,
                       ...renderCategoryMenuItems(
                         getHierarchicalCategoryItems('Expense'),
                         expandedCatsFilter,
-                        toggleExpandId(setExpandedCatsFilter)
+                        toggleExpandId(setExpandedCatsFilter),
+                        true
                       ),
                     ]}
                   </Select>
