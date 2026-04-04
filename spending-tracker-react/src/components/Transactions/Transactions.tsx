@@ -1147,6 +1147,23 @@ const Transactions = () => {
             },
             accessToken
           );
+
+          // Also update all already-materialized future occurrences in the Transactions table
+          // (rows with this RecurringTransactionId dated >= this occurrence's date, excluding this row itself)
+          const pg = PostgrestClientFactory.createClient(accessToken);
+          await pg
+            .from('Transactions')
+            .update({
+              Amount: signedAmount,
+              Note: editFormData.note,
+              CategoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : null,
+              UpdatedAt: new Date().toISOString(),
+            })
+            .eq('RecurringTransactionId', editingTransaction.recurringTransactionId)
+            .gte('Date', editFormData.date)
+            .neq('TransactionId', typeof editingTransaction.transactionId === 'number'
+              ? editingTransaction.transactionId
+              : parseInt(editingTransaction.transactionId.toString()));
         } else {
           // User turned off recurring - stop the recurring transaction and remove link
           const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
@@ -2159,7 +2176,7 @@ const Transactions = () => {
               fullWidth
               sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
             >
-              All Future Occurrences
+              This &amp; All Future Occurrences
             </Button>
           </DialogContent>
           <DialogActions sx={{ justifyContent: 'center', pb: 2.5, pt: 0 }}>
@@ -2197,7 +2214,7 @@ const Transactions = () => {
               fullWidth
               sx={{ textTransform: 'none', justifyContent: 'center', py: 1.2, borderRadius: 2, fontWeight: 500 }}
             >
-              All Future Occurrences
+              This &amp; All Future Occurrences
             </Button>
           </DialogContent>
           <DialogActions sx={{ justifyContent: 'center', pb: 2.5, pt: 0 }}>
