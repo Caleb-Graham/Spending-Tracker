@@ -2407,17 +2407,17 @@ const Transactions = () => {
           <DialogActions>
             <Button onClick={handleCreateClose}>Cancel</Button>
             <Button
-              onClick={() => handleCreateTransaction(false)}
-              disabled={isCreating}
-            >
-              Create &amp; Close
-            </Button>
-            <Button
               onClick={() => handleCreateTransaction(true)}
-              variant="contained"
               disabled={isCreating}
             >
               {isCreating ? 'Creating...' : 'Create'}
+            </Button>
+            <Button
+              onClick={() => handleCreateTransaction(false)}
+              variant="contained"
+              disabled={isCreating}
+            >
+              Create &amp; Close
             </Button>
           </DialogActions>
         </Dialog>
