@@ -1347,9 +1347,9 @@ const NetWorth: React.FC = () => {
                                 <React.Fragment key={cat}>
                                   <TableRow>
                                     <TableCell sx={{ pl: 2, fontWeight: 600, pb: 0 }}>{cat}</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>{formatCurrency(lv(catBase, catCompare)!)}</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>{formatCurrency(rv(catBase, catCompare)!)}</TableCell>
-                                    <TableCell align="right" sx={{ pb: 0 }}>{renderDelta(dd(catDelta) as number, true)}</TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}></TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}></TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}></TableCell>
                                   </TableRow>
                                   {rows.map(row => (
                                     <TableRow key={row.name} sx={{ '& td': { borderBottom: 'none', py: 0.5 } }}>
@@ -1359,6 +1359,12 @@ const NetWorth: React.FC = () => {
                                       <TableCell align="right">{renderDelta(dd(row.delta))}</TableCell>
                                     </TableRow>
                                   ))}
+                                  <TableRow>
+                                    <TableCell sx={{ pl: 3, fontWeight: 700, pt: 0 }}>Total:</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 700, pt: 0 }}>{formatCurrency(lv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 700, pt: 0 }}>{formatCurrency(rv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ pt: 0 }}>{renderDelta(dd(catDelta) as number, true)}</TableCell>
+                                  </TableRow>
                                 </React.Fragment>
                               );
                             })}
@@ -1391,9 +1397,9 @@ const NetWorth: React.FC = () => {
                                 <React.Fragment key={cat}>
                                   <TableRow>
                                     <TableCell sx={{ pl: 2, fontWeight: 600, pb: 0 }}>{cat}</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>-{formatCurrency(lv(catBase, catCompare)!)}</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 600, pb: 0 }}>-{formatCurrency(rv(catBase, catCompare)!)}</TableCell>
-                                    <TableCell align="right" sx={{ pb: 0 }}>{renderDelta(liabCatNetDelta, true)}</TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}></TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}></TableCell>
+                                    <TableCell align="right" sx={{ pb: 0 }}></TableCell>
                                   </TableRow>
                                   {rows.map(row => (
                                     <TableRow key={row.name} sx={{ '& td': { borderBottom: 'none', py: 0.5 } }}>
@@ -1403,6 +1409,12 @@ const NetWorth: React.FC = () => {
                                       <TableCell align="right">{renderDelta(liabRowDelta(row))}</TableCell>
                                     </TableRow>
                                   ))}
+                                  <TableRow>
+                                    <TableCell sx={{ pl: 3, fontWeight: 700, pt: 0 }}>Total:</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 700, pt: 0 }}>-{formatCurrency(lv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 700, pt: 0 }}>-{formatCurrency(rv(catBase, catCompare)!)}</TableCell>
+                                    <TableCell align="right" sx={{ pt: 0 }}>{renderDelta(liabCatNetDelta, true)}</TableCell>
+                                  </TableRow>
                                 </React.Fragment>
                               );
                             })}
