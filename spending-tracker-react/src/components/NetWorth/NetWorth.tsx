@@ -27,9 +27,10 @@ import {
   FormControlLabel,
   Checkbox,
   Badge,
-  Divider
+  Divider,
+  Tooltip as MuiTooltip
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon, FilterList as FilterListIcon, CompareArrows as CompareArrowsIcon, Close as CloseIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Settings as SettingsIcon, FilterList as FilterListIcon, CompareArrows as CompareArrowsIcon, Close as CloseIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { getLocalToday, formatDate } from '../../utils/dateUtils';
 import { 
@@ -283,6 +284,17 @@ const NetWorth: React.FC = () => {
     } else {
       setSelectedSnapshot(snapshotWithChanges);
       loadCategorySummary(snapshot.snapshotId);
+    }
+  };
+
+  const handlePrimarySnapshotSelect = (snapshot: NetWorthSnapshot) => {
+    const snapshotWithChanges = snapshotsWithChanges.find(s => s.snapshotId === snapshot.snapshotId) || snapshot;
+    setSelectedSnapshot(snapshotWithChanges);
+    loadCategorySummary(snapshot.snapshotId);
+
+    if (compareSnapshot?.snapshotId === snapshot.snapshotId) {
+      setCompareSnapshot(null);
+      setCompareDetails(null);
     }
   };
 
@@ -653,6 +665,19 @@ const NetWorth: React.FC = () => {
 
   // Transform data for chart with calculated changes - with filtering
   const snapshotsWithChanges = calculateChanges(snapshots);
+  const selectedSnapshotIndex = selectedSnapshot
+    ? snapshotsWithChanges.findIndex(snapshot => snapshot.snapshotId === selectedSnapshot.snapshotId)
+    : -1;
+  const previousSnapshot = selectedSnapshotIndex > 0 ? snapshotsWithChanges[selectedSnapshotIndex - 1] : null;
+  const nextSnapshot = selectedSnapshotIndex >= 0 && selectedSnapshotIndex < snapshotsWithChanges.length - 1
+    ? snapshotsWithChanges[selectedSnapshotIndex + 1]
+    : null;
+
+  const navigateSelectedSnapshot = (direction: 'previous' | 'next') => {
+    const targetSnapshot = direction === 'previous' ? previousSnapshot : nextSnapshot;
+    if (!targetSnapshot) return;
+    handlePrimarySnapshotSelect(targetSnapshot);
+  };
   
   // Compute filtered chart data
   const chartData = useMemo(() => {
@@ -858,11 +883,16 @@ const NetWorth: React.FC = () => {
       {/* Chart Section */}
       <Box style={{ marginTop: '24px' }}>
         <Paper style={{ padding: '20px' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              {/* <Typography variant="h6">
-                Net Worth
-              </Typography> */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
+              alignItems: 'center',
+              gap: 1,
+              mb: 2,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
               {getSelectedFilterItems().map(item => (
                 <Chip
                   key={`${item.type}-${item.id}`}
@@ -873,23 +903,68 @@ const NetWorth: React.FC = () => {
                 />
               ))}
             </Box>
-            <IconButton
-              onClick={(e) => setFilterAnchorEl(e.currentTarget)}
-              size="small"
-              sx={{ 
-                border: 1, 
-                borderColor: hasActiveFilter ? 'primary.main' : 'divider',
-                borderRadius: 1
-              }}
-            >
-              <Badge 
-                badgeContent={selectedAccounts.size + selectedCategories.size} 
-                color="primary"
-                sx={{ '& .MuiBadge-badge': { fontSize: '0.65rem', height: 16, minWidth: 16 } }}
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              {selectedSnapshot && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                  }}
+                >
+                  <MuiTooltip title={previousSnapshot ? `Go to ${formatDate(previousSnapshot.date, 'MMMM yyyy')}` : 'No earlier snapshot'}>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => navigateSelectedSnapshot('previous')}
+                        disabled={!previousSnapshot || isLoadingDetail}
+                        aria-label="Previous net worth snapshot"
+                      >
+                        <ChevronLeftIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </MuiTooltip>
+                  <Typography
+                    variant="h6"
+                    fontWeight={700}
+                    sx={{ minWidth: 142, textAlign: 'center' }}
+                  >
+                    {formatDate(selectedSnapshot.date, 'MMMM yyyy')}
+                  </Typography>
+                  <MuiTooltip title={nextSnapshot ? `Go to ${formatDate(nextSnapshot.date, 'MMMM yyyy')}` : 'No later snapshot'}>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => navigateSelectedSnapshot('next')}
+                        disabled={!nextSnapshot || isLoadingDetail}
+                        aria-label="Next net worth snapshot"
+                      >
+                        <ChevronRightIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </MuiTooltip>
+                </Box>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <IconButton
+                onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+                size="small"
+                sx={{ 
+                  border: 1, 
+                  borderColor: hasActiveFilter ? 'primary.main' : 'divider',
+                  borderRadius: 1
+                }}
               >
-                <FilterListIcon sx={{ fontSize: 20 }} />
-              </Badge>
-            </IconButton>
+                <Badge 
+                  badgeContent={selectedAccounts.size + selectedCategories.size} 
+                  color="primary"
+                  sx={{ '& .MuiBadge-badge': { fontSize: '0.65rem', height: 16, minWidth: 16 } }}
+                >
+                  <FilterListIcon sx={{ fontSize: 20 }} />
+                </Badge>
+              </IconButton>
+            </Box>
           </Box>
           
           {/* Filter Popover */}
