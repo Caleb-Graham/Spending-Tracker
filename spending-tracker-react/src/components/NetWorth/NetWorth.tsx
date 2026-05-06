@@ -53,6 +53,32 @@ import DateRangeSelector from '../shared/DateRangeSelector';
 import SettingsManager from './SettingsManager';
 import './NetWorth.css';
 
+type NetWorthChartFilterState = {
+  selectedAccounts: number[];
+  selectedCategories: string[];
+};
+
+const NET_WORTH_CHART_FILTER_STORAGE_KEY = 'netWorth_chart_filters';
+
+const readStoredNetWorthChartFilters = (): NetWorthChartFilterState => {
+  try {
+    const stored = localStorage.getItem(NET_WORTH_CHART_FILTER_STORAGE_KEY);
+    if (!stored) return { selectedAccounts: [], selectedCategories: [] };
+
+    const parsed = JSON.parse(stored);
+    return {
+      selectedAccounts: Array.isArray(parsed.selectedAccounts)
+        ? parsed.selectedAccounts.filter((value: unknown): value is number => typeof value === 'number')
+        : [],
+      selectedCategories: Array.isArray(parsed.selectedCategories)
+        ? parsed.selectedCategories.filter((value: unknown): value is string => typeof value === 'string')
+        : [],
+    };
+  } catch {
+    return { selectedAccounts: [], selectedCategories: [] };
+  }
+};
+
 const NetWorth: React.FC = () => {
   const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
@@ -67,9 +93,10 @@ const NetWorth: React.FC = () => {
   const [settingsManagerOpen, setSettingsManagerOpen] = useState(false);
   
   // Filter state for chart
+  const [storedChartFilters] = useState(readStoredNetWorthChartFilters);
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
-  const [selectedAccounts, setSelectedAccounts] = useState<Set<number>>(new Set());
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedAccounts, setSelectedAccounts] = useState<Set<number>>(() => new Set(storedChartFilters.selectedAccounts));
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(() => new Set(storedChartFilters.selectedCategories));
   const [accountValues, setAccountValues] = useState<SnapshotAccountValue[]>([]);
   
   // Pagination state for historical snapshots
@@ -116,6 +143,13 @@ const NetWorth: React.FC = () => {
     };
     fetchToken();
   }, [isAuthenticated, getAccessToken]);
+
+  useEffect(() => {
+    localStorage.setItem(NET_WORTH_CHART_FILTER_STORAGE_KEY, JSON.stringify({
+      selectedAccounts: Array.from(selectedAccounts),
+      selectedCategories: Array.from(selectedCategories),
+    }));
+  }, [selectedAccounts, selectedCategories]);
   
   // Use the shared date range hook
   const dateRangeState = useDateRange({

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../utils/auth';
 import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, skipRecurringInstanceNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency, getUserInfoBatch, type UserInfo } from '../../services';
 import { getUserAccountId } from '../../utils/accountUtils';
@@ -48,6 +48,47 @@ import './Transactions.css';
 type SortField = 'date' | 'note' | 'category' | 'amount' | 'type' | 'recurring';
 type SortDirection = 'asc' | 'desc';
 
+type TransactionFilterState = {
+  typeFilter: string;
+  categoryFilter: string[];
+  personFilter: string;
+  recurringFilter: string;
+  searchTerm: string;
+  showFutureOnly: boolean;
+};
+
+const TRANSACTION_FILTER_STORAGE_KEY = 'transactions_filters';
+
+const defaultTransactionFilters: TransactionFilterState = {
+  typeFilter: 'all',
+  categoryFilter: [],
+  personFilter: 'all',
+  recurringFilter: 'all',
+  searchTerm: '',
+  showFutureOnly: false,
+};
+
+const readStoredTransactionFilters = (): TransactionFilterState => {
+  try {
+    const stored = localStorage.getItem(TRANSACTION_FILTER_STORAGE_KEY);
+    if (!stored) return defaultTransactionFilters;
+
+    const parsed = JSON.parse(stored);
+    return {
+      typeFilter: typeof parsed.typeFilter === 'string' ? parsed.typeFilter : defaultTransactionFilters.typeFilter,
+      categoryFilter: Array.isArray(parsed.categoryFilter)
+        ? parsed.categoryFilter.filter((value: unknown): value is string => typeof value === 'string')
+        : defaultTransactionFilters.categoryFilter,
+      personFilter: typeof parsed.personFilter === 'string' ? parsed.personFilter : defaultTransactionFilters.personFilter,
+      recurringFilter: typeof parsed.recurringFilter === 'string' ? parsed.recurringFilter : defaultTransactionFilters.recurringFilter,
+      searchTerm: typeof parsed.searchTerm === 'string' ? parsed.searchTerm : defaultTransactionFilters.searchTerm,
+      showFutureOnly: typeof parsed.showFutureOnly === 'boolean' ? parsed.showFutureOnly : defaultTransactionFilters.showFutureOnly,
+    };
+  } catch {
+    return defaultTransactionFilters;
+  }
+};
+
 const Transactions = () => {
   const { user, isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
@@ -64,11 +105,13 @@ const Transactions = () => {
   });
 
   // Filter states
-  const [typeFilter, setTypeFilter] = useState<string>('all'); // 'all', 'income', 'expense'
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
-  const [personFilter, setPersonFilter] = useState<string>('all'); // 'all', 'me', or a specific userId
-  const [recurringFilter, setRecurringFilter] = useState<string>('all'); // 'all', 'recurring', 'one-time'
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [storedFilters] = useState(readStoredTransactionFilters);
+  const [typeFilter, setTypeFilter] = useState<string>(storedFilters.typeFilter); // 'all', 'income', 'expense'
+  const [categoryFilter, setCategoryFilter] = useState<string[]>(storedFilters.categoryFilter);
+  const [personFilter, setPersonFilter] = useState<string>(storedFilters.personFilter); // 'all', 'me', or a specific userId
+  const [recurringFilter, setRecurringFilter] = useState<string>(storedFilters.recurringFilter); // 'all', 'recurring', 'one-time'
+  const [searchTerm, setSearchTerm] = useState<string>(storedFilters.searchTerm);
+  const previousTypeFilter = useRef(typeFilter);
   
   // Initialize view period from localStorage with 1 hour expiry
   const [viewPeriod, setViewPeriodState] = useState<'month' | 'year' | 'week' | 'all'>(() => {
@@ -117,7 +160,7 @@ const Transactions = () => {
     });
   };
   
-  const [showFutureOnly, setShowFutureOnly] = useState<boolean>(false);
+  const [showFutureOnly, setShowFutureOnly] = useState<boolean>(storedFilters.showFutureOnly);
 
   // Sorting states
   const [sortField, setSortField] = useState<SortField>('date');
@@ -434,7 +477,18 @@ const Transactions = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [typeFilter, categoryFilter, searchTerm, viewPeriod, selectedDate, showFutureOnly]);
+  }, [typeFilter, categoryFilter, personFilter, recurringFilter, searchTerm, viewPeriod, selectedDate, showFutureOnly]);
+
+  useEffect(() => {
+    localStorage.setItem(TRANSACTION_FILTER_STORAGE_KEY, JSON.stringify({
+      typeFilter,
+      categoryFilter,
+      personFilter,
+      recurringFilter,
+      searchTerm,
+      showFutureOnly,
+    }));
+  }, [typeFilter, categoryFilter, personFilter, recurringFilter, searchTerm, showFutureOnly]);
 
   // Load user info for transactions added by others
   useEffect(() => {
@@ -461,6 +515,10 @@ const Transactions = () => {
 
   // Reset category filter when type filter changes (since available categories change)
   useEffect(() => {
+    if (previousTypeFilter.current === typeFilter) {
+      return;
+    }
+    previousTypeFilter.current = typeFilter;
     setCategoryFilter([]);
   }, [typeFilter]);
 
@@ -1513,6 +1571,15 @@ const Transactions = () => {
               </Box>
             )}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto', flexShrink: 0 }}>
+              {getActiveFilterCount() > 0 && (
+                <Button
+                  size="small"
+                  onClick={clearFilters}
+                  sx={{ flexShrink: 0 }}
+                >
+                  Clear Filters
+                </Button>
+              )}
               {/* Search Field */}
               <TextField
               size="small"
@@ -1555,16 +1622,8 @@ const Transactions = () => {
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
               <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 200 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Filters</Typography>
-                  <Button
-                    size="small"
-                    onClick={() => { clearFilters(); setFilterAnchorEl(null); }}
-                    disabled={getActiveFilterCount() === 0}
-                    sx={{ minWidth: 0, p: 0, fontSize: '0.75rem' }}
-                  >
-                    Clear Filters
-                  </Button>
                 </Box>
                 <FormControl fullWidth size="small">
                   <InputLabel>Type</InputLabel>
