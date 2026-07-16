@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { StackProvider, StackTheme, StackHandler } from '@stackframe/react';
+import { HexclaveProvider, HexclaveTheme, HexclaveHandler } from '@hexclave/react';
 import './App.css';
 import Header from './components/shared/Header';
 import Summary from './components/Summary/Summary';
@@ -8,7 +8,7 @@ import Transactions from './components/Transactions/Transactions';
 import Categories from './components/Categories/Categories';
 import NetWorth from './components/NetWorth/NetWorth';
 import Planning from './components/Planning/Planning';
-import { stackApp, useAuth } from './utils/auth';
+import { hexclaveApp, useAuth } from './utils/auth';
 import { ThemeProvider } from './context/ThemeContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -27,7 +27,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AuthHandler() {
   const { pathname } = useLocation();
-  return <StackHandler app={stackApp} location={pathname} fullPage />;
+  return <HexclaveHandler app={hexclaveApp} location={pathname} fullPage />;
 }
 
 function AppRoutes() {
@@ -53,13 +53,13 @@ export default function App() {
   return (
     <Suspense fallback={null}>
       <Router>
-        <StackProvider app={stackApp}>
-          <StackTheme>
+        <HexclaveProvider app={hexclaveApp}>
+          <HexclaveTheme>
             <ThemeProvider>
               <AppRoutes />
             </ThemeProvider>
-          </StackTheme>
-        </StackProvider>
+          </HexclaveTheme>
+        </HexclaveProvider>
       </Router>
     </Suspense>
   );

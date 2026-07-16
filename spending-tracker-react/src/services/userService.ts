@@ -51,7 +51,7 @@ async function fetchUserInfo(userId: string): Promise<UserInfo | null> {
       const contentType = response.headers.get("content-type");
       // If we got HTML or 404, the API route doesn't exist (local dev)
       if (response.status === 404 || contentType?.includes("text/html")) {
-        // Fallback to direct Stack Auth API call (dev only)
+        // Fallback to direct Hexclave API call (dev only)
         return await fetchUserInfoDirect(userId);
       }
       console.error(`Failed to fetch user info: ${response.status}`);
@@ -72,27 +72,27 @@ async function fetchUserInfo(userId: string): Promise<UserInfo | null> {
   }
 }
 
-// Direct Stack Auth API call for local development
+// Direct Hexclave API call for local development
 async function fetchUserInfoDirect(userId: string): Promise<UserInfo | null> {
-  const projectId = import.meta.env.VITE_STACK_PROJECT_ID;
-  const secretKey = import.meta.env.VITE_STACK_SECRET_KEY;
+  const projectId = import.meta.env.VITE_HEXCLAVE_PROJECT_ID;
+  const secretKey = import.meta.env.VITE_HEXCLAVE_SECRET_KEY;
 
   if (!projectId || !secretKey) {
     console.warn(
-      "[UserService] Stack Auth credentials not available for user lookup"
+      "[UserService] Hexclave credentials not available for user lookup"
     );
     return null;
   }
 
   try {
     const response = await fetch(
-      `https://api.stack-auth.com/api/v1/users/${encodeURIComponent(userId)}`,
+      `https://api.hexclave.com/api/v1/users/${encodeURIComponent(userId)}`,
       {
         method: "GET",
         headers: {
-          "x-stack-project-id": projectId,
-          "x-stack-secret-server-key": secretKey,
-          "x-stack-access-type": "server",
+          "x-hexclave-project-id": projectId,
+          "x-hexclave-secret-server-key": secretKey,
+          "x-hexclave-access-type": "server",
           "Content-Type": "application/json",
         },
       }
@@ -104,7 +104,7 @@ async function fetchUserInfoDirect(userId: string): Promise<UserInfo | null> {
       }
       const errorText = await response.text();
       console.error(
-        `[UserService] Stack Auth API error: ${response.status}`,
+        `[UserService] Hexclave API error: ${response.status}`,
         errorText
       );
       return null;
@@ -118,7 +118,7 @@ async function fetchUserInfoDirect(userId: string): Promise<UserInfo | null> {
       profileImageUrl: user.profile_image_url || null,
     };
   } catch (error) {
-    console.error("Error fetching user from Stack Auth:", error);
+    console.error("Error fetching user from Hexclave:", error);
     return null;
   }
 }

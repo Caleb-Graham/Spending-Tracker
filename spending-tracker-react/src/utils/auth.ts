@@ -1,10 +1,10 @@
-import { StackClientApp, useUser } from "@stackframe/react";
+import { HexclaveClientApp, useUser } from "@hexclave/react";
 import { useNavigate } from "react-router-dom";
 
-// Stack Auth client
-export const stackApp = new StackClientApp({
-  projectId: import.meta.env.VITE_STACK_PROJECT_ID,
-  publishableClientKey: import.meta.env.VITE_STACK_PUBLISHABLE_CLIENT_KEY,
+// Hexclave client
+export const hexclaveApp = new HexclaveClientApp({
+  projectId: import.meta.env.VITE_HEXCLAVE_PROJECT_ID,
+  publishableClientKey: import.meta.env.VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY,
   tokenStore: "cookie",
   redirectMethod: { useNavigate },
 });

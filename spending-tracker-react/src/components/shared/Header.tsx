@@ -62,7 +62,7 @@ const Header: React.FC = () => {
     handleMenuClose();
   };
 
-  // Get user's profile image and display name (Stack Auth properties)
+  // Get the user's profile image and display name (Hexclave properties)
   const profileImageUrl = user?.profileImageUrl || undefined;
   const displayName = user?.displayName || user?.primaryEmail || 'User';
 

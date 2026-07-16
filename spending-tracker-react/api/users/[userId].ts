@@ -3,9 +3,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 // API endpoint to look up user info by userId
 // Returns displayName and profileImageUrl for displaying who added a transaction
-// Uses Stack Auth REST API: https://docs.stack-auth.com/rest-api/server/users
+// Uses the Hexclave REST API: https://docs.hexclave.com/api/overview
 
-const STACK_API_URL = "https://api.stack-auth.com/api/v1";
+const HEXCLAVE_API_URL = "https://api.hexclave.com/api/v1";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow GET requests
@@ -19,24 +19,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Missing userId parameter" });
   }
 
-  const projectId = process.env.VITE_STACK_PROJECT_ID;
-  const secretKey = process.env.VITE_STACK_SECRET_KEY;
+  const projectId = process.env.VITE_HEXCLAVE_PROJECT_ID;
+  const secretKey = process.env.VITE_HEXCLAVE_SECRET_KEY;
 
   if (!projectId || !secretKey) {
-    console.error("[API] Missing Stack Auth configuration");
+    console.error("[API] Missing Hexclave configuration");
     return res.status(500).json({ error: "Server configuration error" });
   }
 
   try {
-    // Call Stack Auth REST API to get user by ID
+    // Call the Hexclave REST API to get user by ID
     const response = await fetch(
-      `${STACK_API_URL}/users/${encodeURIComponent(userId)}`,
+      `${HEXCLAVE_API_URL}/users/${encodeURIComponent(userId)}`,
       {
         method: "GET",
         headers: {
-          "x-stack-project-id": projectId,
-          "x-stack-secret-server-key": secretKey,
-          "x-stack-access-type": "server",
+          "x-hexclave-project-id": projectId,
+          "x-hexclave-secret-server-key": secretKey,
+          "x-hexclave-access-type": "server",
           "Content-Type": "application/json",
         },
       }
@@ -46,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (response.status === 404) {
         return res.status(404).json({ error: "User not found" });
       }
-      console.error(`[API] Stack Auth API error: ${response.status}`);
+      console.error(`[API] Hexclave API error: ${response.status}`);
       return res.status(500).json({ error: "Failed to fetch user info" });
     }
 
