@@ -1191,37 +1191,74 @@ const Transactions = () => {
       // Handle recurring transaction changes (only when editing all future occurrences)
       if (editingTransaction.recurringTransactionId && editRecurringScope === 'all') {
         if (editFormData.isRecurring) {
-          // Update recurring transaction properties
-          const { updateRecurringTransactionNeon } = await import('../../services/recurringTransactionService');
+          const {
+            getRecurringTransactionByIdNeon,
+            updateRecurringTransactionNeon,
+          } = await import('../../services/recurringTransactionService');
+          const recurringTransactionId = editingTransaction.recurringTransactionId;
+          const originalOccurrenceDate = editingTransaction.date.split('T')[0];
+          const currentRule = await getRecurringTransactionByIdNeon(
+            recurringTransactionId,
+            accessToken
+          );
+          const scheduleChanged =
+            currentRule.frequency !== editFormData.recurringFrequency ||
+            currentRule.interval !== editFormData.recurringInterval ||
+            originalOccurrenceDate !== editFormData.date;
           
           await updateRecurringTransactionNeon(
-            editingTransaction.recurringTransactionId,
+            recurringTransactionId,
             {
               amount: signedAmount,
               note: editFormData.note,
               categoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : undefined,
               frequency: editFormData.recurringFrequency,
               interval: editFormData.recurringInterval,
+              // "This & future" starts a new schedule at this occurrence. Keeping
+              // the rule's original StartAt would replay the new cadence into history.
+              startAt: editFormData.date,
+              endAt: editFormData.recurringEndDate || null,
             },
             accessToken
           );
 
-          // Also update all already-materialized future occurrences in the Transactions table
-          // (rows with this RecurringTransactionId dated >= this occurrence's date, excluding this row itself)
           const pg = PostgrestClientFactory.createClient(accessToken);
-          await pg
-            .from('Transactions')
-            .update({
-              Amount: signedAmount,
-              Note: editFormData.note,
-              CategoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : null,
-              UpdatedAt: new Date().toISOString(),
-            })
-            .eq('RecurringTransactionId', editingTransaction.recurringTransactionId)
-            .gte('Date', editFormData.date)
-            .neq('TransactionId', typeof editingTransaction.transactionId === 'number'
-              ? editingTransaction.transactionId
-              : parseInt(editingTransaction.transactionId.toString()));
+
+          if (scheduleChanged) {
+            // Later rows were generated with the old cadence. Remove only those
+            // rows; loadTransactions will rebuild occurrences from the new anchor.
+            const { error: deleteFutureError } = await pg
+              .from('Transactions')
+              .delete()
+              .eq('RecurringTransactionId', recurringTransactionId)
+              .gt('Date', originalOccurrenceDate);
+
+            if (deleteFutureError) {
+              throw new Error(deleteFutureError.message || 'Failed to rebuild future recurring transactions');
+            }
+          } else {
+            // The cadence is unchanged, so existing later instances only need
+            // their editable values synchronized.
+            let updateFutureQuery = pg
+              .from('Transactions')
+              .update({
+                Amount: signedAmount,
+                Note: editFormData.note,
+                CategoryId: editFormData.categoryId ? parseInt(editFormData.categoryId) : null,
+                UpdatedAt: new Date().toISOString(),
+              })
+              .eq('RecurringTransactionId', recurringTransactionId)
+              .gt('Date', originalOccurrenceDate);
+
+            if (typeof editingTransaction.transactionId === 'number') {
+              updateFutureQuery = updateFutureQuery.neq('TransactionId', editingTransaction.transactionId);
+            }
+
+            const { error: updateFutureError } = await updateFutureQuery;
+            if (updateFutureError) {
+              throw new Error(updateFutureError.message || 'Failed to update future recurring transactions');
+            }
+          }
         } else {
           // User turned off recurring - stop the recurring transaction and remove link
           const { deleteRecurringTransactionNeon } = await import('../../services/recurringTransactionService');

@@ -299,6 +299,7 @@ export const updateRecurringTransactionNeon = async (
     categoryId?: number;
     frequency?: RecurringFrequency;
     interval?: number;
+    startAt?: string;
     endAt?: string | null;
   },
   accessToken: string,
@@ -315,6 +316,7 @@ export const updateRecurringTransactionNeon = async (
     updateData.CategoryId = updates.categoryId;
   if (updates.frequency !== undefined) updateData.Frequency = updates.frequency;
   if (updates.interval !== undefined) updateData.Interval = updates.interval;
+  if (updates.startAt !== undefined) updateData.StartAt = updates.startAt;
   if (updates.endAt !== undefined) updateData.EndAt = updates.endAt;
 
   const { error } = await pg
