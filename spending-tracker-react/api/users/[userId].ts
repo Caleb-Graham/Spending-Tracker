@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const projectId = process.env.VITE_HEXCLAVE_PROJECT_ID;
-  const secretKey = process.env.VITE_HEXCLAVE_SECRET_KEY;
+  const secretKey = process.env.HEXCLAVE_SECRET_KEY;
 
   if (!projectId || !secretKey) {
     console.error("[API] Missing Hexclave configuration");

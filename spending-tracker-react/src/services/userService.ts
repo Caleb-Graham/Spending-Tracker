@@ -44,81 +44,24 @@ export async function getUserInfo(userId: string): Promise<UserInfo | null> {
 
 async function fetchUserInfo(userId: string): Promise<UserInfo | null> {
   try {
-    // Try the API endpoint first (works in production)
     const response = await fetch(`/api/users/${encodeURIComponent(userId)}`);
 
     if (!response.ok) {
-      const contentType = response.headers.get("content-type");
-      // If we got HTML or 404, the API route doesn't exist (local dev)
-      if (response.status === 404 || contentType?.includes("text/html")) {
-        // Fallback to direct Hexclave API call (dev only)
-        return await fetchUserInfoDirect(userId);
-      }
       console.error(`Failed to fetch user info: ${response.status}`);
       return null;
     }
 
     const contentType = response.headers.get("content-type");
     if (!contentType?.includes("application/json")) {
-      // Got HTML instead of JSON - API route not available, use fallback
-      return await fetchUserInfoDirect(userId);
+      console.error(
+        "[UserService] User API returned a non-JSON response. Run local development through `vercel dev` so serverless API routes are available."
+      );
+      return null;
     }
 
     return await response.json();
   } catch (error) {
     console.error("Error fetching user info:", error);
-    // Try the fallback
-    return await fetchUserInfoDirect(userId);
-  }
-}
-
-// Direct Hexclave API call for local development
-async function fetchUserInfoDirect(userId: string): Promise<UserInfo | null> {
-  const projectId = import.meta.env.VITE_HEXCLAVE_PROJECT_ID;
-  const secretKey = import.meta.env.VITE_HEXCLAVE_SECRET_KEY;
-
-  if (!projectId || !secretKey) {
-    console.warn(
-      "[UserService] Hexclave credentials not available for user lookup"
-    );
-    return null;
-  }
-
-  try {
-    const response = await fetch(
-      `https://api.hexclave.com/api/v1/users/${encodeURIComponent(userId)}`,
-      {
-        method: "GET",
-        headers: {
-          "x-hexclave-project-id": projectId,
-          "x-hexclave-secret-server-key": secretKey,
-          "x-hexclave-access-type": "server",
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      const errorText = await response.text();
-      console.error(
-        `[UserService] Hexclave API error: ${response.status}`,
-        errorText
-      );
-      return null;
-    }
-
-    const user = await response.json();
-    return {
-      id: user.id,
-      displayName:
-        user.display_name || user.primary_email?.split("@")[0] || null,
-      profileImageUrl: user.profile_image_url || null,
-    };
-  } catch (error) {
-    console.error("Error fetching user from Hexclave:", error);
     return null;
   }
 }
