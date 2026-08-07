@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../utils/auth';
 import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, skipRecurringInstanceNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency, getUserInfoBatch, type UserInfo } from '../../services';
-import { getUserAccountId } from '../../utils/accountUtils';
+import { findUserAccountId } from '../../utils/accountUtils';
 import { getLocalToday } from '../../utils/dateUtils';
 import {
   Table,
@@ -239,17 +239,16 @@ const Transactions = () => {
         throw new Error('No access token available');
       }
 
-      // Fetch accountId if not already loaded
-      if (accountId === null) {
-        const userAccountId = await getUserAccountId(accessToken);
-        setAccountId(userAccountId);
-      }
-
-      // Load data from Neon Data API
-      const [transactionData, categoryData] = await Promise.all([
+      // Load the optional account alongside the page data. New users may not
+      // have an active account yet, which is a valid empty state for this page.
+      const [userAccountId, transactionData, categoryData] = await Promise.all([
+        accountId === null
+          ? findUserAccountId(accessToken)
+          : Promise.resolve(accountId),
         getTransactionsNeon(accessToken),
         getAllCategoriesNeon(accessToken)
       ]);
+      setAccountId(userAccountId);
       setTransactions(transactionData);
       setCategories(categoryData);
     } catch (error) {
