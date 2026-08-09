@@ -8,6 +8,7 @@ import Transactions from './components/Transactions/Transactions';
 import Categories from './components/Categories/Categories';
 import NetWorth from './components/NetWorth/NetWorth';
 import Planning from './components/Planning/Planning';
+import Settings from './components/Settings/Settings';
 import { hexclaveApp, useAuth } from './utils/auth';
 import { ThemeProvider } from './context/ThemeContext';
 
@@ -42,6 +43,7 @@ function AppRoutes() {
           <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
           <Route path="/networth" element={<ProtectedRoute><NetWorth /></ProtectedRoute>} />
           <Route path="/planning" element={<ProtectedRoute><Planning /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/handler/*" element={<AuthHandler />} />
         </Routes>
       </div>

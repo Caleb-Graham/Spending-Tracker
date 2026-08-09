@@ -40,7 +40,7 @@ const Header: React.FC = () => {
     if (path.includes('/categories')) return '/categories';
     if (path.includes('/networth')) return '/networth';
     if (path.includes('/planning')) return '/planning';
-    return '/summary';
+    return false;
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -57,8 +57,8 @@ const Header: React.FC = () => {
     handleMenuClose();
   };
 
-  const handleProfile = () => {
-    navigate('/handler/account-settings');
+  const handleSettings = () => {
+    navigate('/settings');
     handleMenuClose();
   };
 
@@ -127,11 +127,11 @@ const Header: React.FC = () => {
                   <ListItemText>{mode === 'dark' ? 'Light Mode' : 'Dark Mode'}</ListItemText>
                 </MenuItem>
                 <Divider />
-                <MenuItem onClick={handleProfile}>
+                <MenuItem onClick={handleSettings}>
                   <ListItemIcon>
                     <SettingsIcon fontSize="small" />
                   </ListItemIcon>
-                  <ListItemText>Account Settings</ListItemText>
+                  <ListItemText>Settings</ListItemText>
                 </MenuItem>
                 <MenuItem onClick={handleSignOut}>
                   <ListItemIcon>

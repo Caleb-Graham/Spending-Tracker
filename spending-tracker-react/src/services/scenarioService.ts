@@ -1,4 +1,5 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
+import { getUserAccountId } from "../utils/accountUtils";
 
 export interface Scenario {
   scenarioId: number;
@@ -57,10 +58,12 @@ export const createScenarioNeon = async (
   request: CreateScenarioRequest
 ): Promise<Scenario> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
+  const accountId = await getUserAccountId(accessToken);
 
   const { data, error } = await pg
     .from("Scenarios")
     .insert({
+      AccountId: accountId,
       UserId: userId,
       Name: request.name,
       Description: request.description,
@@ -137,11 +140,13 @@ export const duplicateScenarioNeon = async (
   request: DuplicateScenarioRequest
 ): Promise<Scenario> => {
   const pg = PostgrestClientFactory.createClient(accessToken);
+  const accountId = await getUserAccountId(accessToken);
 
   // Create new scenario
   const { data: newScenario, error: createError } = await pg
     .from("Scenarios")
     .insert({
+      AccountId: accountId,
       UserId: userId,
       Name: request.name,
       Description: request.description,
@@ -170,6 +175,8 @@ export const duplicateScenarioNeon = async (
   // Copy budgets to new scenario
   if (sourceBudgets && sourceBudgets.length > 0) {
     const newBudgets = sourceBudgets.map((budget: any) => ({
+      AccountId: accountId,
+      UserId: userId,
       CategoryId: budget.CategoryId,
       ScenarioId: newScenario.ScenarioId,
       Year: budget.Year,

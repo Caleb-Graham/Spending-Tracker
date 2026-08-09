@@ -38,10 +38,35 @@ import './Summary.css';
 const Summary = () => {
   const { isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
+  const [accessToken, setAccessToken] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAccessToken = async () => {
+      if (!isAuthenticated) {
+        setAccessToken(undefined);
+        return;
+      }
+
+      const token = await getAccessToken();
+      if (!cancelled) setAccessToken(token ?? undefined);
+    };
+
+    loadAccessToken();
+    return () => {
+      cancelled = true;
+    };
+    // getAccessToken is recreated by the auth wrapper; authentication changes
+    // are the event that should refresh this token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   const dateRangeState = useDateRange({
     storageKey: 'summary',
     defaultRange: 'ytd',
     dataSource: 'transactions',
+    accessToken,
   });
   const { startDate, endDate } = dateRangeState;
   const [detailedCategorySummary, setDetailedCategorySummary] = useState<{

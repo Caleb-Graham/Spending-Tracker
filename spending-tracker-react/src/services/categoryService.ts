@@ -296,7 +296,6 @@ export const getAllCategoriesNeon = async (
       Name,
       Type,
       ParentCategoryId,
-      IsArchived,
       ParentCategory:Categories!ParentCategoryId(Name)
     `,
     )
@@ -314,7 +313,7 @@ export const getAllCategoriesNeon = async (
       type: row.Type,
       parentCategoryId: row.ParentCategoryId,
       parentCategoryName: row.ParentCategory?.Name,
-      isArchived: row.IsArchived || false,
+      isArchived: false,
     })) || [];
 
   return categories;
@@ -426,7 +425,7 @@ export const getCategoryMappingsNeon = async (
   // First, fetch all child categories (those with a ParentCategoryId)
   let query = pg
     .from("Categories")
-    .select("CategoryId,Name,Type,ParentCategoryId,IsArchived")
+    .select("CategoryId,Name,Type,ParentCategoryId")
     .not("ParentCategoryId", "is", null);
 
   // Filter by type if provided
@@ -460,7 +459,7 @@ export const getCategoryMappingsNeon = async (
     categoryName: row.Name,
     parentCategoryId: row.ParentCategoryId,
     parentCategoryName: categoryNameMap.get(row.ParentCategoryId) || "Unknown",
-    isArchived: row.IsArchived === true,
+    isArchived: false,
   }));
 };
 

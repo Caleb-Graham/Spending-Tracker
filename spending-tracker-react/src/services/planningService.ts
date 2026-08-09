@@ -1,4 +1,5 @@
 import { PostgrestClientFactory } from "./postgrestClientFactory";
+import { getUserAccountId } from "../utils/accountUtils";
 
 export interface PlanningBudget {
   planningBudgetId: number;
@@ -102,10 +103,12 @@ export const savePlanningBudgetNeon = async (
     }
     result = data;
   } else {
-    // Insert new with UserId
+    // AccountId is required by the account-scoped RLS policy.
+    const accountId = await getUserAccountId(accessToken);
     const { data, error } = await pg
       .from("PlanningBudgets")
       .insert({
+        AccountId: accountId,
         UserId: userId,
         CategoryId: request.categoryId,
         ScenarioId: request.scenarioId,

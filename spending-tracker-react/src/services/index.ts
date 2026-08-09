@@ -7,3 +7,4 @@ export * from "./scenarioService";
 export * from "./planningService";
 export * from "./postgrestClientFactory";
 export * from "./userService";
+export * from "./wellsFargoImportService";

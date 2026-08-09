@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../utils/auth';
-import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, skipRecurringInstanceNeon, PostgrestClientFactory, type Transaction, type Category, type RecurringFrequency, getUserInfoBatch, type UserInfo } from '../../services';
+import { getTransactionsNeon, getAllCategoriesNeon, updateTransactionNeon, createTransactionNeon, createRecurringTransactionNeon, skipRecurringInstanceNeon, PostgrestClientFactory, createWellsFargoImportPreview, createWellsFargoExcludedCsv, importWellsFargoTransactionsNeon, type WellsFargoImportPreview, type Transaction, type Category, type RecurringFrequency, getUserInfoBatch, type UserInfo } from '../../services';
 import { findUserAccountId } from '../../utils/accountUtils';
 import { getLocalToday } from '../../utils/dateUtils';
+import { useAppSettings } from '../../hooks/useAppSettings';
 import {
   Table,
   TableBody,
@@ -40,7 +41,7 @@ import {
   Divider,
   Chip
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon, ExpandMore as ExpandMoreIcon, ChevronRight as ChevronRightIcon, KeyboardArrowLeft as ArrowLeftIcon, KeyboardArrowRight as ArrowRightIcon, FilterList as FilterListIcon, Search as SearchIcon, Close as CloseIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Repeat as RepeatIcon, ExpandMore as ExpandMoreIcon, ChevronRight as ChevronRightIcon, KeyboardArrowLeft as ArrowLeftIcon, KeyboardArrowRight as ArrowRightIcon, FilterList as FilterListIcon, Search as SearchIcon, Close as CloseIcon, UploadFile as UploadFileIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import './Transactions.css';
@@ -93,6 +94,7 @@ const Transactions = () => {
   const { user, isAuthenticated, getAccessToken } = useAuth();
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
+  const { settings } = useAppSettings(user?.id);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accountId, setAccountId] = useState<number | null>(null);
@@ -201,6 +203,13 @@ const Transactions = () => {
     recurringEndDate: '' // End date for recurring transactions
   });
   const [isCreating, setIsCreating] = useState(false);
+
+  // Wells Fargo CSV import state
+  const wellsFargoFileInputRef = useRef<HTMLInputElement>(null);
+  const [wellsFargoImportDialogOpen, setWellsFargoImportDialogOpen] = useState(false);
+  const [wellsFargoImportFilename, setWellsFargoImportFilename] = useState('');
+  const [wellsFargoImportPreview, setWellsFargoImportPreview] = useState<WellsFargoImportPreview | null>(null);
+  const [isImportingWellsFargo, setIsImportingWellsFargo] = useState(false);
 
   // Delete recurring transaction dialog state
   const [deleteRecurringDialogOpen, setDeleteRecurringDialogOpen] = useState(false);
@@ -1562,6 +1571,83 @@ const Transactions = () => {
     }
   };
 
+  const handleWellsFargoFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const csvText = await file.text();
+      const preview = createWellsFargoImportPreview(csvText, transactions);
+      setWellsFargoImportFilename(file.name);
+      setWellsFargoImportPreview(preview);
+      setWellsFargoImportDialogOpen(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to read the CSV';
+      setNotification({ message: `Wells Fargo import failed: ${message}`, severity: 'error' });
+    }
+  };
+
+  const handleWellsFargoImportClose = () => {
+    if (isImportingWellsFargo) return;
+    setWellsFargoImportDialogOpen(false);
+    setWellsFargoImportFilename('');
+    setWellsFargoImportPreview(null);
+  };
+
+  const handleWellsFargoExcludedDownload = () => {
+    if (!wellsFargoImportPreview?.skipped.length) return;
+
+    const csv = createWellsFargoExcludedCsv(wellsFargoImportPreview.skipped);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const baseName = wellsFargoImportFilename.replace(/\.csv$/i, '') || 'transactions';
+    link.href = url;
+    link.download = `${baseName}-excluded.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleWellsFargoImportConfirm = async () => {
+    if (!wellsFargoImportPreview || wellsFargoImportPreview.needsReview.length > 0) return;
+    if (!user?.id) {
+      setNotification({ message: 'Signed-in user not available', severity: 'error' });
+      return;
+    }
+
+    setIsImportingWellsFargo(true);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error('No access token available');
+
+      const result = await importWellsFargoTransactionsNeon({
+        accessToken,
+        userId: user.id,
+        accountId,
+        rows: wellsFargoImportPreview.importable,
+      });
+      setAccountId(result.accountId);
+      setNotification({
+        message: result.importedCount > 0
+          ? `Imported ${result.importedCount} transaction${result.importedCount === 1 ? '' : 's'}${result.duplicateCount > 0 ? ` and skipped ${result.duplicateCount} duplicate${result.duplicateCount === 1 ? '' : 's'}` : ''}`
+          : 'No new Wells Fargo transactions to import',
+        severity: 'success',
+      });
+      setWellsFargoImportDialogOpen(false);
+      setWellsFargoImportFilename('');
+      setWellsFargoImportPreview(null);
+      await loadTransactions();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown import error';
+      setNotification({ message: `Wells Fargo import failed: ${message}`, severity: 'error' });
+    } finally {
+      setIsImportingWellsFargo(false);
+    }
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <div className="transactions-container">
@@ -1769,6 +1855,27 @@ const Transactions = () => {
                 />
               </Box>
             </Popover>
+            {settings.wellsFargoImportEnabled && (
+              <>
+                <input
+                  ref={wellsFargoFileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  hidden
+                  onChange={handleWellsFargoFileSelected}
+                />
+                <Tooltip title="Preview and import a Wells Fargo transaction CSV">
+                  <Button
+                    variant="outlined"
+                    startIcon={<UploadFileIcon />}
+                    onClick={() => wellsFargoFileInputRef.current?.click()}
+                    disabled={isLoading}
+                  >
+                    Import Wells Fargo CSV
+                  </Button>
+                </Tooltip>
+              </>
+            )}
             <Button
               variant="contained"
               onClick={() => handleCreateOpen()}
@@ -2513,6 +2620,129 @@ const Transactions = () => {
               disabled={isCreating}
             >
               Create &amp; Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Wells Fargo Import Preview Dialog */}
+        <Dialog
+          open={wellsFargoImportDialogOpen}
+          onClose={handleWellsFargoImportClose}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>Review Wells Fargo Import</DialogTitle>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {wellsFargoImportFilename}
+            </Typography>
+
+            {wellsFargoImportPreview && (
+              <>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' }, gap: 1 }}>
+                  {[
+                    ['Ready', wellsFargoImportPreview.importable.length, 'success.main'],
+                    ['Excluded', wellsFargoImportPreview.skipped.length, 'text.secondary'],
+                    ['Money In', wellsFargoImportPreview.importable.filter((row) => row.amount > 0).reduce((sum, row) => sum + row.amount, 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' }), 'success.main'],
+                    ['Money Out', wellsFargoImportPreview.importable.filter((row) => row.amount < 0).reduce((sum, row) => sum + Math.abs(row.amount), 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' }), 'error.main'],
+                  ].map(([label, value, color]) => (
+                    <Paper key={String(label)} variant="outlined" sx={{ p: 1.5, textAlign: 'center' }}>
+                      <Typography variant="h6" sx={{ color }}>{value}</Typography>
+                      <Typography variant="caption" color="text.secondary">{label}</Typography>
+                    </Paper>
+                  ))}
+                </Box>
+
+                {wellsFargoImportPreview.duplicates.length > 0 && (
+                  <Alert severity="info">
+                    {wellsFargoImportPreview.duplicates.length} duplicate transaction{wellsFargoImportPreview.duplicates.length === 1 ? '' : 's'} already exist and will not be imported again.
+                  </Alert>
+                )}
+
+                {wellsFargoImportPreview.needsReview.length > 0 && (
+                  <Alert severity="error">
+                    {wellsFargoImportPreview.needsReview.length} transaction{wellsFargoImportPreview.needsReview.length === 1 ? '' : 's'} need a merchant mapping before this file can be imported.
+                  </Alert>
+                )}
+
+                {wellsFargoImportPreview.needsReview.length > 0 && (
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 220 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Needs Review</TableCell>
+                          <TableCell>Source Category</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {wellsFargoImportPreview.needsReview.map((row) => (
+                          <TableRow key={`${row.lineNumber}-${row.description}`}>
+                            <TableCell>
+                              <Typography variant="body2">{row.description}</Typography>
+                              <Typography variant="caption" color="text.secondary">{row.reason}</Typography>
+                            </TableCell>
+                            <TableCell>{row.sourceCategory}</TableCell>
+                            <TableCell align="right">{row.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                <Typography variant="subtitle2">Category Summary</Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Category</TableCell>
+                        <TableCell align="right">Transactions</TableCell>
+                        <TableCell align="right">Net Amount</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {wellsFargoImportPreview.categorySummary.map((summary) => (
+                        <TableRow key={`${summary.parentCategory}-${summary.categoryName}`}>
+                          <TableCell>{summary.parentCategory} / {summary.categoryName}</TableCell>
+                          <TableCell align="right">{summary.count}</TableCell>
+                          <TableCell align="right">
+                            {summary.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleWellsFargoExcludedDownload}
+              disabled={!wellsFargoImportPreview?.skipped.length || isImportingWellsFargo}
+              sx={{ mr: 'auto' }}
+            >
+              Download {wellsFargoImportPreview?.skipped.length || 0} Excluded
+            </Button>
+            <Button onClick={handleWellsFargoImportClose} disabled={isImportingWellsFargo}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleWellsFargoImportConfirm}
+              disabled={
+                isImportingWellsFargo ||
+                !wellsFargoImportPreview ||
+                wellsFargoImportPreview.importable.length === 0 ||
+                wellsFargoImportPreview.needsReview.length > 0
+              }
+            >
+              {isImportingWellsFargo
+                ? 'Importing...'
+                : `Import ${wellsFargoImportPreview?.importable.length || 0} Transactions`}
             </Button>
           </DialogActions>
         </Dialog>

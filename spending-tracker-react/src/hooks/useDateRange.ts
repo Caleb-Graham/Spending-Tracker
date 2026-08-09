@@ -102,6 +102,24 @@ export interface DateRangeActions {
   getDisplayDateRange: () => string;
 }
 
+interface DateBounds {
+  start: Date;
+  end: Date;
+}
+
+const getBounds = (dates: string[]): DateBounds | null => {
+  const validDates = dates
+    .map((date) => new Date(date))
+    .filter((date) => !Number.isNaN(date.getTime()));
+
+  if (validDates.length === 0) return null;
+
+  return {
+    start: new Date(Math.min(...validDates.map((date) => date.getTime()))),
+    end: new Date(Math.max(...validDates.map((date) => date.getTime()))),
+  };
+};
+
 export const useDateRange = (
   options: UseDateRangeOptions = {},
 ): DateRangeState & DateRangeActions => {
@@ -140,83 +158,47 @@ export const useDateRange = (
 
   // Helper functions to get initial dates — defined at module level above
 
-  // Function to get the earliest transaction date
-  const getEarliestTransactionDate = async (): Promise<Date> => {
+  // Virtual recurring transactions can extend into the future. "All Time"
+  // should describe recorded activity, so derive both ends from real rows only.
+  const getTransactionDateBounds = async (): Promise<DateBounds | null> => {
     try {
-      // If no access token, return current date
       if (!accessToken) {
-        console.warn(
-          "No access token provided for fetching earliest transaction date",
-        );
-        return new Date();
+        return null;
       }
 
       const transactions = await getTransactionsNeon(accessToken);
-      if (transactions.length === 0) {
-        // If no transactions, default to current date
-        return new Date();
-      }
-
-      // Find the earliest transaction date
-      const earliestDate = transactions.reduce(
-        (earliest: Date, transaction: Transaction) => {
-          const transactionDate = new Date(transaction.date);
-          return transactionDate < earliest ? transactionDate : earliest;
-        },
-        new Date(transactions[0].date),
+      return getBounds(
+        transactions
+          .filter((transaction: Transaction) => !transaction.isVirtual)
+          .map((transaction: Transaction) => transaction.date),
       );
-
-      return earliestDate;
     } catch (error) {
-      console.error("Failed to fetch transactions for earliest date:", error);
-      // Fallback to current date if there's an error
-      return new Date();
+      console.error("Failed to fetch transaction date bounds:", error);
+      return null;
     }
   };
 
-  // Function to get the earliest net worth snapshot date
-  const getEarliestNetWorthDate = async (): Promise<Date> => {
+  const getNetWorthDateBounds = async (): Promise<DateBounds | null> => {
     try {
-      // If no access token, return current date
       if (!accessToken) {
-        console.warn(
-          "No access token provided for fetching earliest net worth date",
-        );
-        return new Date();
+        return null;
       }
 
       const snapshots = await getNetWorthSnapshotsNeon(accessToken);
-      if (snapshots.length === 0) {
-        // If no snapshots, default to current date
-        return new Date();
-      }
-
-      // Find the earliest snapshot date
-      const earliestDate = snapshots.reduce(
-        (earliest: Date, snapshot: NetWorthSnapshot) => {
-          const snapshotDate = new Date(snapshot.date);
-          return snapshotDate < earliest ? snapshotDate : earliest;
-        },
-        new Date(snapshots[0].date),
+      return getBounds(
+        snapshots.map((snapshot: NetWorthSnapshot) => snapshot.date),
       );
-
-      return earliestDate;
     } catch (error) {
-      console.error(
-        "Failed to fetch net worth snapshots for earliest date:",
-        error,
-      );
-      // Fallback to current date if there's an error
-      return new Date();
+      console.error("Failed to fetch net worth date bounds:", error);
+      return null;
     }
   };
 
-  // Function to get the earliest date based on data source
-  const getEarliestDate = async (): Promise<Date> => {
+  const getDateBounds = async (): Promise<DateBounds | null> => {
     if (dataSource === "networth") {
-      return getEarliestNetWorthDate();
+      return getNetWorthDateBounds();
     } else {
-      return getEarliestTransactionDate();
+      return getTransactionDateBounds();
     }
   };
 
@@ -260,8 +242,7 @@ export const useDateRange = (
         const endOfLastYear = new Date(now.getFullYear() - 1, 11, 31);
         return { start: lastYear, end: endOfLastYear };
       case "all":
-        const earliestDate = await getEarliestDate();
-        return { start: earliestDate, end: now };
+        return (await getDateBounds()) ?? {};
       default:
         return {};
     }
@@ -293,22 +274,27 @@ export const useDateRange = (
     }
   }, [endDate, storageKey]);
 
-  // Update dates on mount if using a preset range
+  // Update preset dates on mount. If an All Time range was restored before the
+  // auth token was ready, run it again as soon as the token arrives.
   useEffect(() => {
+    let cancelled = false;
+
     const updateDatesForPreset = async () => {
-      // Only update if using a preset range (not 'all')
-      if (dateRange !== "all") {
-        const { start, end } = await getDateRangeForSelection(dateRange);
-        if (start && end) {
-          setStartDateState(start);
-          setEndDateState(end);
-        }
+      if (dateRange === "all" && !accessToken) return;
+
+      const { start, end } = await getDateRangeForSelection(dateRange);
+      if (!cancelled && start && end) {
+        setStartDateState(start);
+        setEndDateState(end);
       }
     };
 
     updateDatesForPreset();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
+  }, [accessToken]);
 
   const setDateRange = async (value: string): Promise<void> => {
     setIsLoading(true);
